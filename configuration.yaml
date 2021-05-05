@@ -1,0 +1,15 @@
+
+#  Testing url
+url: "http://spacenet-dataset.s3.amazonaws.com/spacenet/SN5_roads/train/AOI_7_Moscow/MS/SN5_roads_train_AOI_7_Moscow_MS_chip996.tif"
+
+#  Output director.
+output_dir: "./CATALOG"
+
+# Catalog Id
+catalog_id: "test-catalog"
+
+# Catalog description
+catalog_desc: "Test catalog"
+
+# Image Id
+image_id: "image_id"
