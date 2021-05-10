@@ -104,7 +104,11 @@ def main(args: Namespace = None) -> int:
     logger.setLevel(logging.DEBUG if "verbose" in args and args.verbose else logging.INFO)
 
     # Configuration to be loaded from main directory
-    CONFIGURATION_FILE_PATH = os.path.join(codedir, "configuration.yaml")
+    if args.test:
+        CONFIGURATION_FILE_PATH = os.path.join(codedir, "test-configuration.yaml")
+    else:
+        CONFIGURATION_FILE_PATH = os.path.join(codedir, "configuration.yaml")
+
     if not os.path.exists(CONFIGURATION_FILE_PATH):
         logger.info("Configuration file is missing")
 
@@ -135,9 +139,9 @@ def main(args: Namespace = None) -> int:
     ofolder = "Folder-Not-Set"
     if args.outdir:
         ofolder = args.outdir
-    elif args.test:
-        ofolder = tmp_dir
-        print("Using temporary directory: {}".format(ofolder))
+    #elif args.test:
+    #    ofolder = tmp_dir
+    #    print("Using temporary directory: {}".format(ofolder))
     else:
         ofolder = out_default
 
@@ -152,17 +156,23 @@ def main(args: Namespace = None) -> int:
         shutil.rmtree(cat_folder)
     os.mkdir(cat_folder)
 
+    # Create catalog
+    catalog = pystac.Catalog(id=catalog_id, description=catalog_desc)
+
     # Get image and then extract information
     img_path = pull_s3bucket(logger, tmp_dir, urlpath, catalog_id, catalog_desc)
     bbox, footprint = get_bbox_and_footprint(img_path)
     logger.debug("Bounding box: {}".format(bbox))
     logger.debug("Footprint: {}".format(footprint))
 
-    # Create catalog
-    catalog = pystac.Catalog(id=catalog_id, description=catalog_desc)
-
     # Add item to catalog
-    dateval = datetime.utcnow()
+    if args.test:
+        dateval = datetime.utcnow()
+    else:
+        fdate = image_id.split("_")[0]
+        dateval = datetime(int(fdate[0:4]),int(fdate[4:6]),int(fdate[6:8]),int(fdate[9:11]),int(fdate[11:13]),int(fdate[13:15]))
+        logger.debug("Date of image: {}".format(dateval))
+
     item = add_item(footprint, bbox, dateval, url, image_id)
     catalog.add_item(item)
 

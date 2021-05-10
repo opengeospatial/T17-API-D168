@@ -1,15 +1,15 @@
 
 #  Testing url
-url: "http://spacenet-dataset.s3.amazonaws.com/spacenet/SN5_roads/train/AOI_7_Moscow/MS/SN5_roads_train_AOI_7_Moscow_MS_chip996.tif"
+url: "https://pixalytics-ogc-test.s3.eu-west-2.amazonaws.com/EO4SAS/classification/20200831T101156_rgb_classification.tif"
 
 #  Output director.
-output_dir: "./CATALOG"
+output_dir: "./ogcapi/CATALOG"
 
 # Catalog Id
-catalog_id: "test-catalog"
+catalog_id: "eo4sas-catalog"
 
 # Catalog description
-catalog_desc: "Test catalog"
+catalog_desc: "EO4SAS catalog"
 
 # Image Id
-image_id: "image_id"
+image_id: "20200831T101156_rgb_classification"
