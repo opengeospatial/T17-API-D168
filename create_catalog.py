@@ -89,6 +89,13 @@ def main(args: Namespace = None) -> int:
             default=False,
         )
         parser.add_argument(
+            "-s",
+            "--stac",
+            help="Create STAC catalog",
+            action="store_true",
+            default=False,
+        )
+        parser.add_argument(
             "-v",
             "--verbose",
             help="Add extra information to logs.",
@@ -156,37 +163,41 @@ def main(args: Namespace = None) -> int:
         shutil.rmtree(cat_folder)
     os.mkdir(cat_folder)
 
-    # Create catalog
-    catalog = pystac.Catalog(id=catalog_id, description=catalog_desc)
+    if args.stac:
+        logger.info("Creating STAC Catalog")
+        # Create catalog
+        catalog = pystac.Catalog(id=catalog_id, description=catalog_desc)
 
-    # Get image and then extract information
-    img_path = pull_s3bucket(logger, tmp_dir, urlpath, catalog_id, catalog_desc)
-    bbox, footprint = get_bbox_and_footprint(img_path)
-    logger.debug("Bounding box: {}".format(bbox))
-    logger.debug("Footprint: {}".format(footprint))
+        # Get image and then extract information
+        img_path = pull_s3bucket(logger, tmp_dir, urlpath, catalog_id, catalog_desc)
+        bbox, footprint = get_bbox_and_footprint(img_path)
+        logger.debug("Bounding box: {}".format(bbox))
+        logger.debug("Footprint: {}".format(footprint))
 
-    # Add item to catalog
-    if args.test:
-        dateval = datetime.utcnow()
+        # Add item to catalog
+        if args.test:
+            dateval = datetime.utcnow()
+        else:
+            fdate = image_id.split("_")[0]
+            dateval = datetime(int(fdate[0:4]),int(fdate[4:6]),int(fdate[6:8]),int(fdate[9:11]),int(fdate[11:13]),int(fdate[13:15]))
+            logger.debug("Date of image: {}".format(dateval))
+
+        item = add_item(footprint, bbox, dateval, url, image_id)
+        catalog.add_item(item)
+
+        # JSON dump item
+        logger.debug(json.dumps(item.to_dict(), indent=4))
+
+        # Set HREFs
+        catalog.normalize_hrefs(cat_folder)
+        # Save catalog
+        catalog.save(catalog_type=pystac.CatalogType.SELF_CONTAINED)
+
+        # Show catalog
+        with open(catalog.get_self_href()) as f:
+            print(f.read())
     else:
-        fdate = image_id.split("_")[0]
-        dateval = datetime(int(fdate[0:4]),int(fdate[4:6]),int(fdate[6:8]),int(fdate[9:11]),int(fdate[11:13]),int(fdate[13:15]))
-        logger.debug("Date of image: {}".format(dateval))
-
-    item = add_item(footprint, bbox, dateval, url, image_id)
-    catalog.add_item(item)
-
-    # JSON dump item
-    logger.debug(json.dumps(item.to_dict(), indent=4))
-
-    # Set HREFs
-    catalog.normalize_hrefs(cat_folder)
-    # Save catalog
-    catalog.save(catalog_type=pystac.CatalogType.SELF_CONTAINED)
-
-    # Show catalog
-    with open(catalog.get_self_href()) as f:
-        print(f.read())
+        logger.info("Creating Records Catalog")
 
     # Clean up
     tmp_dir.cleanup()

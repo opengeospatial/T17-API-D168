@@ -133,3 +133,6 @@ dmypy.json
 
 # Output folder
 ogcapi
+
+# Like to pygeometa
+pygeometa
