@@ -13,3 +13,6 @@ catalog_desc: "Test catalog"
 
 # Image Id
 image_id: "image_id"
+
+# YAML for API Records
+yaml_file: "./eo4sas-record.yml"

@@ -10,6 +10,10 @@ import rasterio
 from shapely.geometry import Polygon, mapping
 from datetime import datetime
 import json
+import re
+# Local repository, from https://github.com/geopython/pygeometa
+from pygeometa.core import read_mcf, render_j2_template
+
 import yaml
 import logging
 
@@ -106,6 +110,7 @@ def main(args: Namespace = None) -> int:
     # define arguments
     args = parser.parse_args()
 
+    # Start logging
     codedir, program = os.path.split(__file__)
     logger = logging.getLogger(program)
     logger.setLevel(logging.DEBUG if "verbose" in args and args.verbose else logging.INFO)
@@ -127,6 +132,7 @@ def main(args: Namespace = None) -> int:
             catalog_id = config["catalog_id"]
             catalog_desc = config["catalog_desc"]
             image_id = config["image_id"]
+            yaml_file = config["yaml_file"]
 
             logging.debug("Configuration was loaded from '{}'.".format(CONFIGURATION_FILE_PATH))
     except Exception:
@@ -157,8 +163,19 @@ def main(args: Namespace = None) -> int:
             print("Output folder {} does not exists".format(ofolder))
             sys.exit(1)
 
+    # Version
+    f = open('__init__.py', "r")
+    version_file = f.read()
+    version_line = re.search(r"^__version__ = ['\"]([^'\"]*)['\"]",version_file, re.M)
+    logger.info("Running {}".format(version_line.group()))
+    version = version_line.group().split("'")[1]
+
     # Create catalog sub_folder - delete if exists
-    cat_folder = os.path.join(ofolder,catalog_id)
+    if args.stac:
+        cat_folder = os.path.join(ofolder,catalog_id + "-stac-v" + version)
+    else:
+        cat_folder = os.path.join(ofolder,catalog_id + "-records-v" + version)
+
     if os.path.exists(cat_folder):
         shutil.rmtree(cat_folder)
     os.mkdir(cat_folder)
@@ -198,6 +215,29 @@ def main(args: Namespace = None) -> int:
             print(f.read())
     else:
         logger.info("Creating Records Catalog")
+
+        # YML contents
+        #dict_file = [{'mcf' : ['version']},{'countries' : ['Pakistan', 'USA', 'India', 'China', 'Germany', 'France', 'Spain']}]
+
+        #with open(out_yaml, 'w') as file:
+
+        #    documents = yaml.dump(dict_file, file)
+
+        # Read YML from disk
+        mcf_dict = read_mcf(yaml_file)
+
+        # Choose API Records output schema
+        from pygeometa.schemas.ogc_api_records import OGCAPIRecordOutputSchema
+        records_os = OGCAPIRecordOutputSchema()
+
+        # Default schema
+        xml_string = records_os.write(mcf_dict)
+        print(xml_string)
+
+        # Write to disk
+        xml_file = os.path.join(cat_folder, os.path.basename(yaml_file.replace("yml","xml")))
+        with open(xml_file, 'w') as ff:
+                ff.write(xml_string)
 
     # Clean up
     tmp_dir.cleanup()
