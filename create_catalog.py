@@ -7,9 +7,11 @@ from argparse import Namespace, ArgumentParser
 import urllib.request
 from tempfile import TemporaryDirectory
 import rasterio
+from rasterio.warp import transform_bounds
 from shapely.geometry import Polygon, mapping
 from datetime import datetime
 import json
+import ast
 import re
 # Local repository, from https://github.com/geopython/pygeometa
 from pygeometa.core import read_mcf, render_j2_template
@@ -17,19 +19,37 @@ from pygeometa.core import read_mcf, render_j2_template
 import yaml
 import logging
 
+# Need to transform to EPSG4326 as other projections not allowed by GeoJSON format
+def get_bbox_and_footprint(logger, raster_uri):
+    dst_crs = 'EPSG:4326'
+    with rasterio.open(raster_uri) as src:
+        logger.debug("Source map projection: {}".format(src.crs))
+        if src.crs == dst_crs:
+            bounds = src.bounds
 
-def get_bbox_and_footprint(raster_uri):
-    with rasterio.open(raster_uri) as ds:
-        bounds = ds.bounds
-        bbox = [bounds.left, bounds.bottom, bounds.right, bounds.top]
-        footprint = Polygon([
-            [bounds.left, bounds.bottom],
-            [bounds.left, bounds.top],
-            [bounds.right, bounds.top],
-            [bounds.right, bounds.bottom]
-        ])
+            bbox = [bounds.left, bounds.bottom, bounds.right, bounds.top]
+            footprint = Polygon([
+                [bounds.left, bounds.bottom],
+                [bounds.left, bounds.top],
+                [bounds.right, bounds.top],
+                [bounds.right, bounds.bottom]
+            ])
+            logger.debug("Bounds: {}".format(bounds))
 
-        return (bbox, mapping(footprint))
+        else:
+            # Transform to Lat & Lon
+            bounds = transform_bounds(src.crs, dst_crs, *src.bounds)
+            logger.debug("Transformed Bounds: {}".format(bounds))
+
+            bbox = [bounds[1], bounds[0], bounds[3], bounds[2]]
+            footprint = Polygon([
+                [bounds[1], bounds[0]],
+                [bounds[1], bounds[2]],
+                [bounds[3], bounds[2]],
+                [bounds[3], bounds[0]]
+            ])
+
+        return bbox, mapping(footprint), dst_crs
 
 
 def pull_s3bucket(logger, tmp_dir, url, catalog_id, catalog_desc):
@@ -103,6 +123,13 @@ def main(args: Namespace = None) -> int:
             "-v",
             "--verbose",
             help="Add extra information to logs.",
+            action="store_true",
+            default=False,
+        )
+        parser.add_argument(
+            "-y",
+            "--yml",
+            help="Update input yaml for API-Records.",
             action="store_true",
             default=False,
         )
@@ -180,24 +207,24 @@ def main(args: Namespace = None) -> int:
         shutil.rmtree(cat_folder)
     os.mkdir(cat_folder)
 
+    # Get image and then extract information
+    img_path = pull_s3bucket(logger, tmp_dir, urlpath, catalog_id, catalog_desc)
+    bbox, footprint, dst_crs = get_bbox_and_footprint(logger, img_path)
+    logger.debug("Footprint: {}".format(footprint))
+
+    # Add item to catalog
+    if args.test:
+        dateval = datetime.utcnow()
+    else:
+        fdate = image_id.split("_")[0]
+        dateval = datetime(int(fdate[0:4]), int(fdate[4:6]), int(fdate[6:8]), int(fdate[9:11]), int(fdate[11:13]),
+                           int(fdate[13:15]))
+        logger.debug("Date of image: {}".format(dateval))
+
     if args.stac:
         logger.info("Creating STAC Catalog")
         # Create catalog
         catalog = pystac.Catalog(id=catalog_id, description=catalog_desc)
-
-        # Get image and then extract information
-        img_path = pull_s3bucket(logger, tmp_dir, urlpath, catalog_id, catalog_desc)
-        bbox, footprint = get_bbox_and_footprint(img_path)
-        logger.debug("Bounding box: {}".format(bbox))
-        logger.debug("Footprint: {}".format(footprint))
-
-        # Add item to catalog
-        if args.test:
-            dateval = datetime.utcnow()
-        else:
-            fdate = image_id.split("_")[0]
-            dateval = datetime(int(fdate[0:4]),int(fdate[4:6]),int(fdate[6:8]),int(fdate[9:11]),int(fdate[11:13]),int(fdate[13:15]))
-            logger.debug("Date of image: {}".format(dateval))
 
         item = add_item(footprint, bbox, dateval, url, image_id)
         catalog.add_item(item)
@@ -216,33 +243,62 @@ def main(args: Namespace = None) -> int:
     else:
         logger.info("Creating Records Catalog")
 
-        # YML contents
-        #dict_file = [{'mcf' : ['version']},{'countries' : ['Pakistan', 'USA', 'India', 'China', 'Germany', 'France', 'Spain']}]
+        out_yaml = os.path.splitext(yaml_file)[0] + "-updated.yml"
 
-        #with open(out_yaml, 'w') as file:
+        # Read YML contents
+        with open(yaml_file) as f:
+            # use safe_load instead load
+            dataMap = yaml.safe_load(f)
+            f.close()
 
-        #    documents = yaml.dump(dict_file, file)
+        #print("dataMap: ",dataMap)
+        # Update bounding box
+        logger.debug("dataMap: {} ".format(dataMap['identification']['extents']['spatial']))
+        yaml_dict = {}
+        yaml_dict['bbox'] = '[{},{},{},{}]'.format(bbox[0],bbox[1],bbox[2],bbox[3])
+        yaml_dict.update({'crs': ast.literal_eval(dst_crs.split(":")[1])})
+        dataMap['identification']['extents']['spatial'] = yaml_dict
+        logger.debug("Modified dataMap: {} ".format(dataMap['identification']['extents']['spatial']))
+
+        # Update dates
+        logger.debug("dataMap: {} ".format(dataMap['identification']['extents']['temporal']))
+        datestr = dateval.strftime("%Y-%m-%d")
+        yaml_dict = {}
+        yaml_dict.update({'begin': datestr})
+        yaml_dict.update({'end': datestr})
+        dataMap['identification']['extents']['temporal'] = yaml_dict
+        logger.debug("Modified dataMap: {} ".format(dataMap['identification']['extents']['temporal']))
+
+        # Remove single quotes
+        dataDict = {re.sub("'", "", key): val for key, val in dataMap.items()}
+
+        # Output modified version
+        if args.yml:
+            with open(out_yaml, 'w') as f:
+                yaml.dump(dataDict, f)
+                f.close()
 
         # Read YML from disk
-        mcf_dict = read_mcf(yaml_file)
+        mcf_dict = read_mcf(out_yaml)
 
         # Choose API Records output schema
         from pygeometa.schemas.ogc_api_records import OGCAPIRecordOutputSchema
         records_os = OGCAPIRecordOutputSchema()
 
         # Default schema
-        xml_string = records_os.write(mcf_dict)
-        print(xml_string)
+        json_string = records_os.write(mcf_dict)
+        print(json_string)
 
         # Write to disk
-        xml_file = os.path.join(cat_folder, os.path.basename(yaml_file.replace("yml","xml")))
-        with open(xml_file, 'w') as ff:
-                ff.write(xml_string)
+        json_file = os.path.join(cat_folder, os.path.basename(yaml_file.replace("yml","json")))
+        with open(json_file, 'w') as ff:
+            ff.write(json_string)
+            ff.close()
 
     # Clean up
     tmp_dir.cleanup()
 
-    logger.info("Processing completed successfully")
+    logger.info("Processing completed successfully for {}".format(cat_folder))
 
 
 if __name__ == "__main__":
