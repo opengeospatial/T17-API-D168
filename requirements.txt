@@ -1,0 +1,8 @@
+boto3
+Click
+Jinja2
+numpy
+pystac
+pyyaml
+rasterio
+shapely

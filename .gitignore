@@ -127,3 +127,12 @@ dmypy.json
 
 # Pyre type checker
 .pyre/
+
+# PyCharm
+.idea/
+
+# Output folder
+ogcapi
+
+# Like to pygeometa
+pygeometa
