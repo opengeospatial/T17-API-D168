@@ -55,7 +55,11 @@ def get_bbox_and_footprint(logger, raster_uri):
 def pull_s3bucket(logger, tmp_dir, url, catalog_id, catalog_desc):
     img_path = os.path.join(tmp_dir.name, 'image.tif')
 
-    urllib.request.urlretrieve(url, img_path)
+    try:
+        urllib.request.urlretrieve(url, img_path)
+    except:
+        logger.warning("Failed to retrieve {}".format(url))
+        sys.exit(1)
     logger.debug(pystac.Catalog.__doc__)
 
     catalog = pystac.Catalog(id=catalog_id, description=catalog_desc)
