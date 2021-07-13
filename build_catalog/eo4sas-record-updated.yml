@@ -33,7 +33,7 @@ distribution:
     function: download
     name: classification
     type: GeoTIFF
-    url: https://pixalytics-ogc-test.s3.eu-west-2.amazonaws.com/EO4SAS/classification/20200831T101156_rgb_classification.tif
+    url: https://pixalytics-ogc-api.s3.eu-west-2.amazonaws.com/EO4SAS/classification/20200831T101156_rgb_classification.tif
 identification:
   abstract: abstract
   accessconstraints: None
@@ -67,7 +67,7 @@ mcf:
   version: 1.0
 metadata:
   charset: utf8
-  dataseturi: https://pixalytics-ogc-test.s3.eu-west-2.amazonaws.com/EO4SAS/
+  dataseturi: https://pixalytics-ogc-api.s3.eu-west-2.amazonaws.com/EO4SAS/
   datestamp: 2021-05-11
   hierarchylevel: dataset
   identifier: pix-lcc-eo4sas-test
