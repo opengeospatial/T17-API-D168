@@ -1,6 +1,6 @@
 
 #  Testing url
-url: "https://pixalytics-ogc-test.s3.eu-west-2.amazonaws.com/EO4SAS/classification/20200831T101156_rgb_classification.tif"
+urls: ["https://pixalytics-ogc-test.s3.eu-west-2.amazonaws.com/EO4SAS/classification/20200831T101156_rgb_classification.tif",]
 
 #  Output director.
 output_dir: "./ogcapi/CATALOG"
