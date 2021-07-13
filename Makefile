@@ -13,3 +13,11 @@ logout:
 ## Running container
 run_docker:
 	docker run -p 8080:8080 $(DOCKER_REPO)/$(DOCKER_IMAGE)
+ 
+## Running catalog building code
+build_catalog_records:
+  ~/.conda/envs/ogcapi/bin/python ~/ogcapi_testbed17_dataset_d168/build_catalog/create_catalog.py -v
+
+build_catalog_stac:
+  ~/.conda/envs/ogcapi/bin/python ~/ogcapi_testbed17_dataset_d168/build_catalog/create_catalog.py -v --stac
+ 

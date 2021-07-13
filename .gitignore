@@ -135,6 +135,7 @@ dmypy.json
 # Output folder
 ogcapi
 
-# Link to pygeometa
+# Links to folders/files
 pygeometa
+deploy_catalog/backend_configuration.json
 
