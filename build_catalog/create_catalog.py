@@ -191,11 +191,11 @@ def main(args: Namespace = None) -> int:
 
     if not os.path.exists(ofolder):
         if not os.path.islink(ofolder):
-            print("Output folder {} does not exists".format(ofolder))
-            sys.exit(1)
+            print("Output folder {} does not exists, creating".format(ofolder))
+            os.makedirs(ofolder)
 
     # Version
-    f = open('__init__.py', "r")
+    f = open(os.path.join(os.path.dirname(__file__),'__init__.py'), "r")
     version_file = f.read()
     version_line = re.search(r"^__version__ = ['\"]([^'\"]*)['\"]",version_file, re.M)
     logger.info("Running {}".format(version_line.group()))
@@ -247,10 +247,10 @@ def main(args: Namespace = None) -> int:
     else:
         logger.info("Creating Records Catalog")
 
-        out_yaml = os.path.splitext(yaml_file)[0] + "-updated.yml"
+        out_yaml = os.path.join(os.path.dirname(__file__), os.path.splitext(yaml_file)[0] + "-updated.yml")
 
         # Read YML contents
-        with open(yaml_file) as f:
+        with open(os.path.join(os.path.dirname(__file__),yaml_file)) as f:
             # use safe_load instead load
             dataMap = yaml.safe_load(f)
             f.close()
