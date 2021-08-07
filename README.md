@@ -9,14 +9,14 @@ or
 
 `conda env create -f ogcapi_env.yml python=3.8`
 
-### Setup pygeometa
-`git clone https://github.com/geopython/pygeometa.git`
+### Setup pygeometa in develop mode so changes are accessed
+`git clone https://github.com/pixalytics-ltd/pygeometa.git`
 
 `cd pygeometa`
 
-`python setup.py build`
+`python setup.py develop`
 
-`python setup.py install`
+<b>Note:</b> pygeometa was updated to include a Record to describe a 'dataset', see https://github.com/cholmes/ogc-collection/blob/main/ogc-dataset-record-spec.md 
 
 
 Notes:

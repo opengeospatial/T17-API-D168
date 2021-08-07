@@ -15,6 +15,8 @@ import ast
 import re
 # Local repository, from https://github.com/geopython/pygeometa
 from pygeometa.core import read_mcf, render_j2_template
+from pygeometa.schemas.ogc_api_dataset_record import OGCAPIDRecordOutputSchema
+from pygeometa.schemas.ogc_api_records import OGCAPIRecordOutputSchema
 
 import yaml
 import logging
@@ -238,6 +240,7 @@ def main(args: Namespace = None) -> int:
 
         # Set HREFs
         catalog.normalize_hrefs(cat_folder)
+
         # Save catalog
         catalog.save(catalog_type=pystac.CatalogType.SELF_CONTAINED)
 
@@ -285,8 +288,33 @@ def main(args: Namespace = None) -> int:
         # Read YML from disk
         mcf_dict = read_mcf(out_yaml)
 
+        # Update yaml with catalog information
+        catalog_dict = {}
+        catalog_dict.update({'cat_id': catalog_id})
+        catalog_dict.update({'cat_description': catalog_desc})
+        # TODO when multiple datasets find start and end dates
+        catalog_dict.update({'cat_begin': dateval.strftime("%Y-%m-%d")})
+        catalog_dict.update({'cat_end': dateval.strftime("%Y-%m-%d")})
+        # JSON dataset files [one at present]
+        json_file = os.path.join(cat_folder, os.path.basename(yaml_file.replace("yml","json")))
+        catalog_dict.update({'cat_file': "./" + os.path.basename(json_file)})
+        mcf_dict.update(catalog_dict)
+
+        # Choose API Dataset Record as catalog
+        # https://github.com/cholmes/ogc-collection/blob/main/ogc-dataset-record-spec.md - see examples
+        records_os = OGCAPIDRecordOutputSchema()
+
+        # Default catalog schema
+        json_string = records_os.write(mcf_dict)
+        print(json_string)
+
+        # Write catalog to disk
+        cat_file = os.path.join(cat_folder, "catalog.json")
+        with open(cat_file, 'w') as ff:
+            ff.write(json_string)
+            ff.close()
+
         # Choose API Records output schema
-        from pygeometa.schemas.ogc_api_records import OGCAPIRecordOutputSchema
         records_os = OGCAPIRecordOutputSchema()
 
         # Default schema
@@ -294,7 +322,6 @@ def main(args: Namespace = None) -> int:
         print(json_string)
 
         # Write to disk
-        json_file = os.path.join(cat_folder, os.path.basename(yaml_file.replace("yml","json")))
         with open(json_file, 'w') as ff:
             ff.write(json_string)
             ff.close()
