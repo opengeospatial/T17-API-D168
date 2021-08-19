@@ -9,8 +9,11 @@ or
 
 `conda env create -f ogcapi_env.yml python=3.8`
 
-### Setup pygeometa
-`git clone https://github.com/geopython/pygeometa.git`
+## Clone this repository
+`git clone https://github.com/opengeospatial/T17-API-D168.git`
+
+## Clone and setup pygeometa - use forked version with updated for OGC API Records catalog creation
+`git clone https://github.com/pixalytics-ltd/pygeometa/tree/t17-rcatalog`
 
 `cd pygeometa`
 
@@ -18,8 +21,5 @@ or
 
 `python setup.py install`
 
-
-Notes:
-#### Export environment
-
-`conda env export > ogcapi_env.yml`
+## Final Steps
+Create link in the main folder of theis repository to pygeometa/pygeometa 
