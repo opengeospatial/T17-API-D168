@@ -1,7 +1,8 @@
-# Byte-compiled / optimized / DLL files
+# Byte-compiled / optimized / DLL / temporary files
 __pycache__/
 *.py[cod]
 *$py.class
+*~
 
 # C extensions
 *.so
@@ -134,5 +135,7 @@ dmypy.json
 # Output folder
 ogcapi
 
-# Like to pygeometa
+# Links to folders/files
 pygeometa
+deploy_catalog/backend_configuration.json
+
