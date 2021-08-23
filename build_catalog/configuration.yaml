@@ -1,6 +1,9 @@
 
 #  Testing url
-url: "https://pixalytics-ogc-api.s3.eu-west-2.amazonaws.com/EO4SAS/classification/20200831T101156_rgb_classification.tif"
+url: "https://pixalytics-ogc-api.s3.eu-west-2.amazonaws.com/EO4SAS/classification/"
+
+#  Testing url
+files: "20191115T102219_rgb_classification.tif,20191220T101537_rgb_classification.tif,20200831T101156_rgb_classification.tif,20201119T104910_rgb_classification.tif,20201214T101151_rgb_classification.tif"
 
 #  Output director.
 output_dir: "./ogcapi/CATALOG"
@@ -10,9 +13,6 @@ catalog_id: "eo4sas-catalog"
 
 # Catalog description
 catalog_desc: "EO4SAS catalog"
-
-# Image Id
-image_id: "20200831T101156_rgb_classification"
 
 # YAML for API Records
 yaml_file: "./eo4sas-record.yml"
