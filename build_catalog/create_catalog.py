@@ -79,7 +79,7 @@ def add_item(footprint, bbox, img_path, image_id):
                        int(fdate[13:15]))
 
     # Add item to catalog and apply timestamp
-    item = pystac.Item(id=image_id,
+    item = pystac.Item(id=image_id.split(".")[0],
                        geometry=footprint,
                        bbox=bbox,
                        datetime=dateval,
