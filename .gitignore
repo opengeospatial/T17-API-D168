@@ -138,5 +138,7 @@ ogcapi
 # Links to folders/files
 pygeometa
 elasticsearch_loader
-deploy_catalog/backend_configuration.json
 
+# Local configuration files
+build_catalog/es_upload_conf.yaml
+deploy_catalog/backend_configuration.json

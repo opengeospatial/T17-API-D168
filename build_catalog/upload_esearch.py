@@ -1,5 +1,8 @@
 import os
+import sys
 import boto3
+# pip install elasticsearch==7.13.4
+# More recent versions of the elasticsearch python library do not support AWS, see https://www.theregister.com/2021/08/09/elasticsearch_python_client_change/
 from elasticsearch import Elasticsearch, RequestsHttpConnection, helpers
 # pip install requests-aws4auth
 from requests_aws4auth import AWS4Auth
@@ -7,16 +10,36 @@ import click
 from click_conf import conf
 from elasticsearch_loader import load
 from elasticsearch_loader.parsers import json
+import yaml
 import logging
 
 home = os.path.expanduser("~")
-iam_name = 'ogc'
-# Elasticsearch
-my_region = 'eu-west-2'
-my_service = 'es'
-my_eshost = 'search-ogc-t17-d168-yhvlgzft2zhuvdssiaejkyq5lq.eu-west-2.es.amazonaws.com'
-# S3 bucket
-bucket = 'pixalytics-ogc-api'
+codedir, program = os.path.split(__file__)
+CONFIGURATION_FILE_PATH = os.path.join(codedir, "es_upload_conf.yaml")
+
+if not os.path.exists(CONFIGURATION_FILE_PATH):
+    print("Configuration file is missing")
+
+try:
+    with open(CONFIGURATION_FILE_PATH, "r") as config_file:
+        config = yaml.safe_load(config_file)
+        # AWS IAM user stored in ~/.aws/credentials
+        iam_name = config["iam_name"]
+        # Elasticsearch
+        my_region = config["my_region"]
+        my_service = config["my_service"]
+        my_eshost = config["my_eshost"]
+        index = config["index"]
+        catalog = config["catalog"]
+        # S3 bucket
+        bucket = config["bucket"]
+
+        print("Configuration was loaded from '{}'.".format(CONFIGURATION_FILE_PATH))
+
+except Exception:
+    print("Unable to load default configuration from '{}'.".format(CONFIGURATION_FILE_PATH))
+    sys.exit(1)
+
 
 def iam_connect():
     # Get session credentials for profile ogc
@@ -64,18 +87,29 @@ def master_connect():
 
 def s3_iterator(bucket, folder):
     for file in bucket.objects.all():
-        if folder in file.key:
-            print("Uploading {}".format(file.key))
-            yield json.load(file.get()['Body'])
+        if folder in file.key and "catalog.json" not in file.key:
+            content = json.load(file.get()['Body'])
+            print("Uploading {} from {}".format(content,file.key))
+            yield content
 
-def load_s3(ctx, bucket, folder):
+def load_s3(ctx, index, bucket, folder):
     # Access bucket
     session = boto3.session.Session(profile_name=iam_name)
     s3 = session.resource('s3')
     bucket_obj = s3.Bucket(bucket)
 
     # Load data from S3 bucket to Elasticsearch
-    load(s3_iterator(bucket_obj, folder), ctx.obj)
+    #load(s3_iterator(bucket_obj, folder), ctx.obj)
+    count = 0
+    for file in bucket_obj.objects.all():
+        if folder in file.key and "catalog.json" not in file.key:
+            content = json.load(file.get()['Body'])
+            print("Uploading {} from {}".format(content,file.key))
+            ctx.obj['es_conn'].index(index=index, id=count, body=content)
+
+            count += 1
+
+
 
 @click.group(invoke_without_command=True, context_settings={"help_option_names": ['-h', '--help']})
 @conf(default='esl.yml')
@@ -92,7 +126,6 @@ def load_s3(ctx, bucket, folder):
 def main(ctx, **opts):
 
     # Start logging
-    codedir, program = os.path.split(__file__)
     logger = logging.getLogger(program)
     logger.setLevel(logging.DEBUG if opts['verbose'] else logging.INFO)
 
@@ -101,32 +134,61 @@ def main(ctx, **opts):
         es = iam_connect()
 
         # Check health
+        print("Health: ")
         es.cluster.health()
 
+        print("\nInfo: ")
         # Dump info
         print(json.dumps(es.info(), indent=2))
+
+        # List indices
+        print("\nAvailable indices: {}".format(es.indices.get_alias("*")))
 
     elif opts['upload']:
         # define options
         ctx.obj = opts
-        ctx.obj['index'] = 'stac-index'
-        ctx.obj['type'] = 's3'
+        ctx.obj['index'] = index
+        ctx.obj['type'] = 'json'
         ctx.obj['es_conn'] = iam_connect()
 
+        # Delete index before uploading
+        ctx.obj['es_conn'].indices.delete(index=index, ignore=[400, 404])
+
         # Upload data to elasticsearch
-        load_s3(ctx, bucket, folder="eo4sas-catalog-stac-v0-5")
+        load_s3(ctx, index, bucket, folder=catalog)
 
     else:
         # Query test-index
         es = iam_connect()
-        res = es.search(index="stac-index", doc_type="articles", body={"query": {"match": {"content": "20191115"}}})
 
-        print("{} documents found".format(res['hits']['total']))
+        # returns dict object of the index _mapping schema
+        raw_data = es.indices.get_mapping(index)
+        print("\nget_mapping response type: {}".format(type(raw_data)))
+
+        # returns dict_keys() obj in Python 3
+        mapping_keys = raw_data[index]["mappings"].keys()
+        print("mapping keys: {}".format(mapping_keys))
+
+        # get the index's doc type'
+        doc_type = list(mapping_keys)[0]
+        print("doc_type: {}".format(doc_type))
+
+        # interrogate the schema by accessing index's _doc type attr'
+        schema = raw_data[index]["mappings"][doc_type ]["properties"]
+        print (json.dumps(schema, indent=4))
+        print ("{} fields in mapping".format( len(schema)))
+        print("all fields: {}".format(list(schema.keys())))
+
+        # Get first document in index
+        result = es.get(index=index, id=1)
+        print("First id for {}: {}".format(index,result))
+
+        test = "Polygon"
+        res = es.search(index=index, doc_type='_doc', q=test)
+
+        print("For {} {} {} found for {}".format(index, res['hits']['total'],doc_type, test))
         for doc in res['hits']['hits']:
-                print("{}) {}".format(doc['_id'], doc['_source']['content']))
-
-        # Add an extra field
-        # es.create(index="test-index", doc_type="articles", body={"content": "One more fox"})
+            print("{} {}".format(doc['_id'], doc['_source']['id']))
 
     logger.info("Processing completed")
 
