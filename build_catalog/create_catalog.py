@@ -1,7 +1,9 @@
 import shutil
 import sys
 
+# pystac 1.1.0 installed
 import pystac
+from pystac.extensions import label
 import os
 from argparse import Namespace, ArgumentParser
 import urllib.request
@@ -72,7 +74,7 @@ def pull_s3bucket(logger, tmp_dir, url, catalog_id, catalog_desc):
     return img_path
 
 
-def add_item(footprint, bbox, img_path, image_id):
+def add_item(footprint, bbox, gsd, img_path, image_id):
 
     fdate = image_id.split("_")[0]
     dateval = datetime(int(fdate[0:4]), int(fdate[4:6]), int(fdate[6:8]), int(fdate[9:11]), int(fdate[11:13]),
@@ -85,21 +87,28 @@ def add_item(footprint, bbox, img_path, image_id):
                        datetime=dateval,
                        properties={})
 
+    # Add common metadata
+    item.common_metadata.gsd = 10.0
+
     # Add image
     item.add_asset(
         key='image',
         asset=pystac.Asset(
             href=img_path+image_id,
-            media_type=pystac.MediaType.GEOTIFF
+            media_type=pystac.MediaType.COG
         )
     )
+
+    # Validate item
+    item.validate()
+
     return item
 
 
 def main(args: Namespace = None) -> int:
     if args is None:
         parser = ArgumentParser(
-            description="Creates STAC Catalog",
+            description="Creates STAC Catalog (as Collection or Catalog) or OGC Records Catalog",
             epilog="Should be run in the 'ogcapi' environment",
         )
         parser.add_argument(
@@ -127,6 +136,13 @@ def main(args: Namespace = None) -> int:
             "-s",
             "--stac",
             help="Create STAC catalog",
+            action="store_true",
+            default=False,
+        )
+        parser.add_argument(
+            "-c",
+            "--collection",
+            help="Create STAC collection",
             action="store_true",
             default=False,
         )
@@ -165,12 +181,14 @@ def main(args: Namespace = None) -> int:
     try:
         with open(CONFIGURATION_FILE_PATH, "r") as config_file:
             config = yaml.safe_load(config_file)
+            catalog_id = config["catalog_id"]
+            catalog_title = config["catalog_title"]
+            catalog_desc = config["catalog_desc"]
             url = config["url"]
             temp = config["files"]
             files = temp.split(",")
             out_default = config["output_dir"]
-            catalog_id = config["catalog_id"]
-            catalog_desc = config["catalog_desc"]
+            gsd = config["gsd"]
             yaml_file = config["yaml_file"]
 
             logging.debug("Configuration was loaded from '{}'.".format(CONFIGURATION_FILE_PATH))
@@ -209,8 +227,26 @@ def main(args: Namespace = None) -> int:
     logger.info("Running {}".format(version_line.group()))
     version = version_line.group().split("'")[1]
 
+    # Date range
+    # Add item to catalog
+    if args.test:
+        dateval = datetime.utcnow()
+    else:
+        fdate = files[0].split("_")[0]
+        dateval = datetime(int(fdate[0:4]), int(fdate[4:6]), int(fdate[6:8]), int(fdate[9:11]), int(fdate[11:13]),
+                           int(fdate[13:15]))
+
+    if len(files) > 1: # If more than one file
+        fdate = files[len(files) - 1].split("_")[0]
+        end_dateval = datetime(int(fdate[0:4]), int(fdate[4:6]), int(fdate[6:8]), int(fdate[9:11]),
+                               int(fdate[11:13]),
+                               int(fdate[13:15]))
+
+    else:
+        end_dateval = dateval
+
     # Create catalog sub_folder - delete if exists
-    if args.stac:
+    if args.stac or args.collection:
         cat_folder = os.path.join(ofolder,catalog_id + "-stac-v" + version)
     else:
         cat_folder = os.path.join(ofolder,catalog_id + "-records-v" + version)
@@ -224,26 +260,41 @@ def main(args: Namespace = None) -> int:
     bbox, footprint, dst_crs = get_bbox_and_footprint(logger, img_path)
     logger.debug("Footprint: {}".format(footprint))
 
-    # Add item to catalog
-    if args.test:
-        dateval = datetime.utcnow()
-    else:
-        dateval = None
+    if args.stac or args.collection:
+        logger.info("Creating STAC Catalog or Collection")
 
-    if args.stac:
-        logger.info("Creating STAC Catalog")
+        # Create collection extent
+        spatial_extent = pystac.SpatialExtent([bbox])
+        temporal_extent = pystac.TemporalExtent([[dateval, end_dateval]])
+        collection_extent = pystac.Extent(spatial_extent, temporal_extent)
+
         # Create catalog
-        catalog = pystac.Catalog(id=catalog_id, description=catalog_desc)
+        if args.collection:
+            catalog = pystac.Collection(id=catalog_id, title=catalog_title, description=catalog_desc, extent=collection_extent)
+
+            # Setup provider information
+            catalog.providers = [
+                pystac.Provider(name='Pixalytics Ltd', roles=['producer'], url='https://www.pixalytics.com/')]
+
+        else:
+            catalog = pystac.Catalog(id=catalog_id, title=catalog_title, description=catalog_desc)
 
         for file in files:
-            item = add_item(footprint, bbox, url, file)
+            item = add_item(footprint, bbox, gsd, url, file)
             catalog.add_item(item)
+
+        # Update extents in catalog from items
+        if args.collection:
+            catalog.update_extent_from_items()
 
         # JSON dump item
         logger.debug(json.dumps(item.to_dict(), indent=4))
 
         # Set HREFs
         catalog.normalize_hrefs(cat_folder)
+
+        # Validate, which needs: pip install pystac[validation]
+        catalog.validate_all()
 
         # Save catalog
         catalog.save(catalog_type=pystac.CatalogType.SELF_CONTAINED)
@@ -259,20 +310,6 @@ def main(args: Namespace = None) -> int:
         catalog_dict = {}
         catalog_dict.update({'cat_id': catalog_id})
         catalog_dict.update({'cat_description': catalog_desc})
-
-        # If more than one file
-        if len(files) > 1:
-            fdate = files[0].split("_")[0]
-            dateval = datetime(int(fdate[0:4]), int(fdate[4:6]), int(fdate[6:8]), int(fdate[9:11]), int(fdate[11:13]),
-                               int(fdate[13:15]))
-            fdate = files[len(files) - 1].split("_")[0]
-            end_dateval = datetime(int(fdate[0:4]), int(fdate[4:6]), int(fdate[6:8]), int(fdate[9:11]),
-                                   int(fdate[11:13]),
-                                   int(fdate[13:15]))
-
-        else:
-            end_dateval = dateval
-
         catalog_dict.update({'cat_begin': dateval.strftime("%Y-%m-%d")})
         catalog_dict.update({'cat_end': end_dateval.strftime("%Y-%m-%d")})
 
