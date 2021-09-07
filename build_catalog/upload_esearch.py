@@ -98,17 +98,34 @@ def load_s3(ctx, index, bucket, folder):
     s3 = session.resource('s3')
     bucket_obj = s3.Bucket(bucket)
 
+    # Creat index and upload mapping to index file
+    mapfile = open(os.path.join(codedir, "index_settings_file.json"), 'rb')
+    response = ctx.obj['es_conn'].indices.create(index=index, body=json.load(mapfile))
+    mapfile.close()
+    if 'acknowledged' in response:
+        if response['acknowledged'] == True:
+            print("Index mapping success for: {}".format(response['index']))
+    # catch API error response
+    elif 'error' in response:
+        print("ERROR:", response['error']['root_cause'])
+        print("TYPE:", response['error']['type'])
+        return
+
     # Load data from S3 bucket to Elasticsearch
     #load(s3_iterator(bucket_obj, folder), ctx.obj)
     count = 0
     for file in bucket_obj.objects.all():
+        #print("File: {}".format(file.key))
         if folder in file.key and "catalog.json" not in file.key:
             content = json.load(file.get()['Body'])
-            print("Uploading {} from {}".format(content,file.key))
-            ctx.obj['es_conn'].index(index=index, id=count, body=content)
+            response = ctx.obj['es_conn'].index(index=index, id=count, body=content)
+            print("Uploading {} from {}: {}".format(content, file.key, response['result']))
 
             count += 1
-
+    if count == 0:
+        print("No files matched to upload")
+    else:
+        print("Completed uploading")
 
 
 @click.group(invoke_without_command=True, context_settings={"help_option_names": ['-h', '--help']})
@@ -157,6 +174,7 @@ def main(ctx, **opts):
         # Upload data to elasticsearch
         load_s3(ctx, index, bucket, folder=catalog)
 
+
     else:
         # Query test-index
         es = iam_connect()
@@ -169,24 +187,20 @@ def main(ctx, **opts):
         mapping_keys = raw_data[index]["mappings"].keys()
         print("mapping keys: {}".format(mapping_keys))
 
-        # get the index's doc type'
-        doc_type = list(mapping_keys)[0]
-        print("doc_type: {}".format(doc_type))
-
         # interrogate the schema by accessing index's _doc type attr'
-        schema = raw_data[index]["mappings"][doc_type ]["properties"]
+        schema = raw_data[index]["mappings"]["properties"]
         print (json.dumps(schema, indent=4))
-        print ("{} fields in mapping".format( len(schema)))
+        print ("{} fields in mapping".format(len(schema)))
         print("all fields: {}".format(list(schema.keys())))
 
         # Get first document in index
         result = es.get(index=index, id=1)
         print("First id for {}: {}".format(index,result))
 
-        test = "Polygon"
-        res = es.search(index=index, doc_type='_doc', q=test)
+        body = {'query': {'bool': {'must': [{'match': {'type': 'Feature'}}]}}}
+        res = es.search(index=index, body=body)
 
-        print("For {} {} {} found for {}".format(index, res['hits']['total'],doc_type, test))
+        print("For {} found {}".format(index, res['hits']['total']))
         for doc in res['hits']['hits']:
             print("{} {}".format(doc['_id'], doc['_source']['id']))
 

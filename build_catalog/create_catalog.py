@@ -45,12 +45,12 @@ def get_bbox_and_footprint(logger, raster_uri):
             bounds = transform_bounds(src.crs, dst_crs, *src.bounds)
             logger.debug("Transformed Bounds: {}".format(bounds))
 
-            bbox = [bounds[1], bounds[0], bounds[3], bounds[2]]
+            bbox = [bounds[0], bounds[1], bounds[2], bounds[3]]
             footprint = Polygon([
-                [bounds[1], bounds[0]],
-                [bounds[1], bounds[2]],
-                [bounds[3], bounds[2]],
-                [bounds[3], bounds[0]]
+                [bounds[0], bounds[1]],
+                [bounds[2], bounds[1]],
+                [bounds[2], bounds[3]],
+                [bounds[0], bounds[3]]
             ])
 
         return bbox, mapping(footprint), dst_crs

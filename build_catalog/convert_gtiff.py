@@ -9,6 +9,7 @@ import datetime as dt
 import time
 import uuid
 from netCDF4 import Dataset, date2num
+import pyproj
 from osgeo import osr, gdal
 import logging
 
@@ -81,21 +82,26 @@ def writeNetCDF(infile, outdir, description, logger):
 
     # Load data
     data, gt, wkt = read_geotiff(infile)
-    minv = np.amin(data)
-    maxv = np.amax(data)
-    logger.info('Data array: {}'.format(data.shape))
-    bands, xdim, ydim = data.shape
+    print('Data array: {}'.format(data.shape))
+    bands, ydim, xdim = data.shape
+
 
     # Calculate four corners
     minx = gt[0]
-    miny = gt[3] + xdim*gt[4] + ydim*gt[5]
-    maxx = gt[0] + xdim*gt[1] + ydim*gt[2]
+    maxx = gt[0] + xdim * gt[1] + ydim * gt[2]
+    miny = gt[3] + xdim * gt[4] + ydim * gt[5]
     maxy = gt[3]
 
     cs = osr.SpatialReference()
     cs.ImportFromWkt(wkt)
-    prj = cs.GetAttrValue('geogcs')
-    logger.info("Projection: {}".format(prj))
+    zone = cs.GetAttrValue("PROJCS").split(" ")[5]
+    if zone[-1:] == "S":
+        correction = -1.0
+    else:
+        correction = 1.0
+    utmz = int(zone[:-1]) * correction
+    prj = cs.GetAttrValue("AUTHORITY", 1)
+    print("EPSG Projection: {} Zone: {}".format(prj, utmz))
     lons = np.linspace(minx, maxx, num=xdim)
     lats = np.linspace(miny, maxy, num=ydim)
 
@@ -122,26 +128,26 @@ def writeNetCDF(infile, outdir, description, logger):
 
     # Dimensions - 3D, time plus number of rows and columns
     nc_fid.createDimension('time', 1)
-    nc_fid.createDimension('lat', lats.shape[0])
-    nc_fid.createDimension('lon', lons.shape[0])
+    nc_fid.createDimension('x0', lons.shape[0])
+    nc_fid.createDimension('y0', lats.shape[0])
 
-    logger.debug("writeNetCDF, Data X(min,max): {:.2f} {:.2f}".format(np.amin(lons), np.amax(lons)))
-    logger.debug("writeNetCDF, Data Y(min,max): {:.2f} {:.2f}".format(np.amin(lats), np.amax(lats)))
-    logger.debug("writeNetCDF, Dimensions YX: {} {}".format(len(lats), len(lons)))
+    print("writeNetCDF, Data X(min,max): {:.2f} {:.2f}".format(minx, maxx))
+    print("writeNetCDF, Data Y(min,max): {:.2f} {:.2f}".format(miny, maxy))
+    print("writeNetCDF, Dimensions YX: {} {}".format(len(lats), len(lons)))
 
     # Variable Attributes for each projection type
-    longitudes = nc_fid.createVariable('lon', 'f8', ('lon',))
-    longitudes[:] = lons[:]
-    latitudes = nc_fid.createVariable('lat', 'f8', ('lat',))
-    latitudes[:] = lats[:]
-    longitudes.long_name = 'longitude'
-    longitudes.units = 'degree_east'
-    latitudes.long_name = 'latitude'
-    latitudes.units = 'degree_north'
-    longitudes.axis = "X"
-    latitudes.axis = "Y"
-    longitudes.reference_datum = "geographical coordinates, WGS84 projection"
-    latitudes.reference_datum = "geographical coordinates, WGS84 projection"
+    x = nc_fid.createVariable('x0', 'f8', ('x0',))
+    x[:] = lons
+    y = nc_fid.createVariable('y0', 'f8', ('y0',))
+    y[:] = lats
+    x.long_name = 'x coordinate of projection'
+    x.standard_name = 'projection_x_coordinate'
+    x.units = 'm'
+    y.long_name = 'y coordinate of projection'
+    y.standard_name = 'projection_y_coordinate'
+    y.units = 'm'
+    x.reference_datum = "cartesian coordinates, UTM projection"
+    y.reference_datum = "cartesian coordinates, UTM projection"
 
     # Temporal attribute setting
     times = nc_fid.createVariable('time', 'f8', ('time',))
@@ -154,28 +160,49 @@ def writeNetCDF(infile, outdir, description, logger):
 
     # Global attributes are set up for each file, dependent on input variable
     # CF Standard Names: http://cfconventions.org/standard-names.html
-    nc_var = nc_fid.createVariable('data', 'u1', ('time', 'lat', 'lon'), fill_value=null_value)
+    nc_var = nc_fid.createVariable('data', 'u1', ('time', 'y0', 'x0'), fill_value=null_value)
     nc_var.setncatts({'long_name': u"{}".format(description),
                       'level_desc': u'Surface',
                       'var_desc': u"Surface Classification"})
 
-    # Defining the parameters and metadata for UTM and East Africa
-    # model projections
+    # Defining the parameters and metadata for UTM aprojections
     crs = nc_fid.createVariable('crs', 'i4')
     nc_var.grid_mapping = "crs"
-    crs.grid_mapping_name = "latitude_longitude"
-    crs.semi_major_axis = 6378137.0
-    crs.inverse_flattening = 298.257
-    crs.epsg_code = 4326
+    # Converting the projection grid from actual projection to WGS84
+    srcproj = pyproj.CRS("EPSG:{}".format(prj))
+    dstproj = pyproj.CRS("EPSG:4326")
+    transformer = pyproj.Transformer.from_crs(srcproj, dstproj)
+    minlat, minlon = transformer.transform(minx, miny)
+    maxlat, maxlon = transformer.transform(maxx, maxy)
+    lons = np.linspace(minlon, maxlon, num=xdim)
+    lats = np.linspace(minlat, maxlat, num=ydim)
+    print("writeNetCDF, Data Lon(min,max): {:.2f} {:.2f}".format(minlon, maxlon))
+    print("writeNetCDF, Data Lat(min,max): {:.2f} {:.2f}".format(minlat, maxlat))
+
+    # Defining the parameters and metadata for UTM projection
+    longitudes = nc_fid.createVariable('lon', 'f8', ('x0',))
+    longitudes[:] = lons[:]
+    latitudes = nc_fid.createVariable('lat', 'f8', ('y0',))
+    latitudes[:] = lats[:]
+    longitudes.long_name = 'longitude'
+    longitudes.units = 'degree_east'
+    latitudes.long_name = 'latitude'
+    latitudes.units = 'degree_north'
+    crs.grid_mapping_name = "transverse_mercator"
+    crs.crs_type = "projected_2d"
+    crs.false_easting = 500000.0
+    crs.false_northing = 10000000.0
+    crs.latitude_of_projection_origin = 0.0
+    crs.scale_factor_at_central_meridian = 0.9996
+    crs.longitude_of_central_meridian = 39.0
+    crs.utm_zone_number = utmz
+    crs.datum = 'WGS84'
+    crs.epsg_code = prj
 
     # Scale data according to acceptable min max range
-    logger.info("writeNetCDF, {} Variable range before scaling: {} {}".format(ofile, np.amin(data[data > null_value]), np.amax(data)))
-    data[data > maxv] = maxv
-    data[(data > null_value) & (data <= minv)] = minv
-    logger.info("writeNetCDF, {} Variable range after scaling: {} {}".format(ofile, np.amin(data[data > null_value]), np.amax(data)))
+    print("writeNetCDF, {} Variable range: {} {}".format(ofile, np.amin(data[0,:,:]), np.amax(data[0,:,:])))
 
-    nc_var = np.zeros((xdim, ydim), dtype=np.uint8)
-    nc_var[:,:] = data[0,:,:]
+    nc_var[0, :, :] = data[0,:,:]
     nc_fid.close()
 
 
@@ -207,6 +234,13 @@ def main(args: Namespace = None) -> int:
             default=False,
         )
         parser.add_argument(
+            "-r",
+            "--rgb",
+            help="Convert RGB version of file",
+            action="store_true",
+            default=False,
+        )
+        parser.add_argument(
             "-v",
             "--verbose",
             help="Add extra information to logs.",
@@ -223,7 +257,12 @@ def main(args: Namespace = None) -> int:
     logger.setLevel(logging.DEBUG if "verbose" in args and args.verbose else logging.INFO)
 
     # Reform any input GeoTIFFs to COGs
-    infiles = glob.glob(os.path.join(args.indir,"*.tif"))
+    if args.rgb:
+        searchstr = os.path.join(args.indir, "*_rgb_classification.tif")
+        infiles = glob.glob(searchstr)
+    else:
+        searchstr = os.path.join(args.indir, "*_classification.tif")
+        infiles = [fn for fn in glob.glob(searchstr) if "rgb" not in os.path.basename(fn)]
     if len(infiles) == 0:
         logger.info("Could not find any input files in {}".format(args.indir))
         sys.exit(1)
