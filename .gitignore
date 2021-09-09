@@ -141,4 +141,7 @@ elasticsearch_loader
 
 # Local configuration files
 deploy_catalog/es_upload_conf.yaml
-create_catalog/eo4sas-record-updated.yml
+build_catalog/eo4sas-record-updated.yml
+
+# Test version of environment file
+environment-all.yml
