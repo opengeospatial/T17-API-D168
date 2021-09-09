@@ -140,5 +140,4 @@ pygeometa
 elasticsearch_loader
 
 # Local configuration files
-build_catalog/es_upload_conf.yaml
-deploy_catalog/backend_configuration.json
+deploy_catalog/es_upload_conf.yaml

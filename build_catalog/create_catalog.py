@@ -15,7 +15,7 @@ from datetime import datetime
 import json
 import ast
 import re
-# Local repository, from https://github.com/geopython/pygeometa
+# Pixalytics version of repository, from https://github.com/geopython/pygeometa
 from pygeometa.core import read_mcf, render_j2_template
 from pygeometa.schemas.ogc_api_dataset_record import OGCAPIDRecordOutputSchema
 from pygeometa.schemas.ogc_api_records import OGCAPIRecordOutputSchema
