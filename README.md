@@ -39,15 +39,19 @@ There will be a soft link to pygeometa under build catalog, so adjust that link 
 
 ## Code folders
 
-### build catalog
+### Build catalog
 
-Use `create_catalog.py` to create STAC or Records catalogs, e.g. to create a STAC collection with the configuration stored in :
+Use `create_catalog.py` to create STAC or Records catalogs with the configuration stored in `test-configuration.yaml` alongside `eo4sas-record.yml` for a Record's catalog. The data referenced in these YAML files is stored in a publicly accessible AWS S3 bucket.
+
+To create a STAC collection you would run:
 
 `~/anaconda3/envs/ogcapi/bin/python create_catalog.py --collection`
 
-### deploy catalog
+If an output dierctory to store the catalog is not specified by --outdir then a folder specified in  will be created in `test-configuration.yaml` will be used. 
 
-Then, to upload to Elasticsearch run the following script with es_upload_conf.yaml defining what is uploaded:
+### Deploy catalog
+
+Then, to upload to Elasticsearch run the following script with `es_upload_conf.yaml` defining what is uploaded:
 
 `python upload_esearch.py --verbose --upload`
 
@@ -56,9 +60,9 @@ If you have problems connecting to Elasticsearch then use the diagnose option
 `/home/seadas/anaconda3/envs/ogcapi/bin/python /upload_esearch.py --verbose --diagnose`
 
 An example configuration files is provide as
-deploy_catalog/[example]es_upload_conf.yaml that needs to be renamed to deploy_catalog/es_upload_conf.yaml and edited with the details of your Elasticsearch instance
+`deploy_catalog/[example]es_upload_conf.yaml` that needs to be renamed to `deploy_catalog/es_upload_conf.yaml` and edited with the details of your Elasticsearch instance
 
 ### utils
 
-Utilities used to support file conversion.
+Utilities used to support file conversion from GeoTiFF to COG or NetCDF.
 

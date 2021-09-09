@@ -209,9 +209,6 @@ def main(args: Namespace = None) -> int:
     ofolder = "Folder-Not-Set"
     if args.outdir:
         ofolder = args.outdir
-    #elif args.test:
-    #    ofolder = tmp_dir
-    #    print("Using temporary directory: {}".format(ofolder))
     else:
         ofolder = out_default
 
