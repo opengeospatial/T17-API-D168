@@ -137,5 +137,11 @@ ogcapi
 
 # Links to folders/files
 pygeometa
-deploy_catalog/backend_configuration.json
+elasticsearch_loader
 
+# Local configuration files
+deploy_catalog/es_upload_conf.yaml
+build_catalog/eo4sas-record-updated.yml
+
+# Test version of environment file
+environment-all.yml
