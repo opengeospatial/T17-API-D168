@@ -1,0 +1,27 @@
+name: ogcapi
+channels:
+  - conda-forge
+  - defaults
+dependencies:
+  - boto3>=1.17.70
+  - gdal>=3.3.1
+  - hdf4>=4.2.15
+  - hdf5>=1.12.1
+  - jinja2>=2.11.3
+  - kealib>=1.4.14
+  - numpy>=1.20.2
+  - pip>=21.1.1
+  - proj>=8.0.1
+  - pystac>=1.1.0
+  - rasterio>=1.2.6
+  - shapely>=1.7.1
+  - yaml>=0.2.5
+  - pip:
+    - elasticsearch==7.13.4
+    - elasticsearch-loader>=0.6.0
+    - netcdf4>=1.5.7
+    - pyproj>=3.2.0
+    - requests>=2.26.0
+    - requests-aws4auth>=1.1.1
+prefix: ~/envs/ogcapi
+

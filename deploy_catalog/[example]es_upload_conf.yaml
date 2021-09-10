@@ -1,0 +1,11 @@
+
+# AWS IAM user stored in ~/.aws/credentials
+iam_name: "xxx"
+# Elasticsearch
+my_region: 'eu-west-2'
+my_service: 'es'
+my_eshost: 'xxx.eu-west-2.es.amazonaws.com'
+index: "stac-index"
+catalog: "eo4sas-catalog-stac-v0-7"
+# S3 bucket where the catalogs are stored
+bucket: 'pixalytics-ogc-api'

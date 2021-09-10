@@ -1,7 +1,15 @@
+<<<<<<< HEAD
+# Byte-compiled / optimized / DLL / temporary files
+__pycache__/
+*.py[cod]
+*$py.class
+*~
+=======
 # Byte-compiled / optimized / DLL files
 __pycache__/
 *.py[cod]
 *$py.class
+>>>>>>> 9c5ab91638193b0e16a71ad5438dd6eb80f86e75
 
 # C extensions
 *.so
@@ -134,5 +142,12 @@ dmypy.json
 # Output folder
 ogcapi
 
-# Like to pygeometa
+# Links to folders/files
 pygeometa
+elasticsearch_loader
+
+# Local configuration files
+deploy_catalog/es_upload_conf.yaml
+build_catalog/eo4sas-record-updated.yml
+environment-all.yml
+Makefile
