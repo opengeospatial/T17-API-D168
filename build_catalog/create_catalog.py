@@ -3,7 +3,7 @@ import sys
 
 # pystac 1.1.0 installed
 import pystac
-from pystac.extensions import label
+from pystac.extensions.projection import ProjectionExtension
 import os
 from argparse import Namespace, ArgumentParser
 import urllib.request
@@ -53,7 +53,7 @@ def get_bbox_and_footprint(logger, raster_uri):
                 [bounds[0], bounds[3]]
             ])
 
-        return bbox, mapping(footprint), dst_crs
+        return bbox, mapping(footprint), str(src.crs), dst_crs
 
 
 def pull_s3bucket(logger, tmp_dir, url, catalog_id, catalog_desc):
@@ -74,7 +74,7 @@ def pull_s3bucket(logger, tmp_dir, url, catalog_id, catalog_desc):
     return img_path
 
 
-def add_item(footprint, bbox, gsd, img_path, image_id):
+def add_item(footprint, bbox, epsg, gsd, img_path, image_id):
 
     fdate = image_id.split("_")[0]
     dateval = datetime(int(fdate[0:4]), int(fdate[4:6]), int(fdate[6:8]), int(fdate[9:11]), int(fdate[11:13]),
@@ -88,7 +88,13 @@ def add_item(footprint, bbox, gsd, img_path, image_id):
                        properties={})
 
     # Add common metadata
-    item.common_metadata.gsd = 10.0
+    item.common_metadata.gsd = float(gsd)
+
+    # Add projection metadata
+    ProjectionExtension.add_to(item)
+    proj_ext = ProjectionExtension.ext(item)
+    print(item.stac_extensions)
+    proj_ext.epsg = int(epsg)
 
     # Add image
     item.add_asset(
@@ -254,7 +260,7 @@ def main(args: Namespace = None) -> int:
 
     # Get image and then extract information from first object
     img_path = pull_s3bucket(logger, tmp_dir, urlpath+files[0], catalog_id, catalog_desc)
-    bbox, footprint, dst_crs = get_bbox_and_footprint(logger, img_path)
+    bbox, footprint, src_crs, dst_crs = get_bbox_and_footprint(logger, img_path)
     logger.debug("Footprint: {}".format(footprint))
 
     if args.stac or args.collection:
@@ -277,7 +283,7 @@ def main(args: Namespace = None) -> int:
             catalog = pystac.Catalog(id=catalog_id, title=catalog_title, description=catalog_desc)
 
         for file in files:
-            item = add_item(footprint, bbox, gsd, url, file)
+            item = add_item(footprint, bbox, src_crs.split(":")[1], gsd, url, file)
             catalog.add_item(item)
 
         # Update extents in catalog from items
