@@ -85,8 +85,7 @@ def writeNetCDF(infile, outdir, description, logger):
     print('Data array: {}'.format(data.shape))
     bands, ydim, xdim = data.shape
 
-
-    # Calculate four corners
+    # Calculate four corners of image
     minx = gt[0]
     maxx = gt[0] + xdim * gt[1] + ydim * gt[2]
     miny = gt[3] + xdim * gt[4] + ydim * gt[5]
@@ -101,6 +100,8 @@ def writeNetCDF(infile, outdir, description, logger):
         correction = 1.0
     utmz = int(zone[:-1]) * correction
     prj = cs.GetAttrValue("AUTHORITY", 1)
+    sref = cs.ExportToWkt()
+    print("Spatial Ref: {}".format(sref))
     print("EPSG Projection: {} Zone: {}".format(prj, utmz))
     lons = np.linspace(minx, maxx, num=xdim)
     lats = np.linspace(miny, maxy, num=ydim)
@@ -121,18 +122,17 @@ def writeNetCDF(infile, outdir, description, logger):
     nc_fid.Conventions = 'CF-1.5'
     nc_fid.iso19115_topic_categories = "Environment; GeoscientificInformation"
     nc_fid.standard_name_vocabulary = "NetCDF Climate and Forecast (CF) Metadata Convention"
-    nc_fid.acknowledgment = "Funded by OGC"
+    nc_fid.acknowledgment = "Testbed 17 activity supported by OGC"
     nc_fid.creator_name = "Pixalytics Ltd"
-    nc_fid.creator_email = "helpdesk@pixalytcs.com"
-    nc_fid.creator_url = "http://www.pixalytics.com"
+    nc_fid.creator_email = "helpdesk@pixalytics.com"
+    nc_fid.creator_url = "https://www.pixalytics.com"
 
     # Dimensions - 3D, time plus number of rows and columns
     nc_fid.createDimension('time', 1)
     nc_fid.createDimension('x0', lons.shape[0])
     nc_fid.createDimension('y0', lats.shape[0])
 
-    print("writeNetCDF, Data X(min,max): {:.2f} {:.2f}".format(minx, maxx))
-    print("writeNetCDF, Data Y(min,max): {:.2f} {:.2f}".format(miny, maxy))
+    print("Data X(min,max): {:.2f} {:.2f} Y(min,max): {:.2f} {:.2f}".format(minx, maxx, miny, maxy))
     print("writeNetCDF, Dimensions YX: {} {}".format(len(lats), len(lons)))
 
     # Variable Attributes for each projection type
@@ -158,17 +158,18 @@ def writeNetCDF(infile, outdir, description, logger):
     times.axis = 'T'
     times.standard_name = 'time'
 
-    # Global attributes are set up for each file, dependent on input variable
+    # Global attributes are set up for each variable
     # CF Standard Names: http://cfconventions.org/standard-names.html
     nc_var = nc_fid.createVariable('data', 'u1', ('time', 'y0', 'x0'), fill_value=null_value)
     nc_var.setncatts({'long_name': u"{}".format(description),
+                      'units': u'None',
                       'level_desc': u'Surface',
                       'var_desc': u"Surface Classification"})
 
     # Defining the parameters and metadata for UTM aprojections
     crs = nc_fid.createVariable('crs', 'i4')
     nc_var.grid_mapping = "crs"
-    # Converting the projection grid from actual projection to WGS84
+    # Converting the projection grid to WGS84
     srcproj = pyproj.CRS("EPSG:{}".format(prj))
     dstproj = pyproj.CRS("EPSG:4326")
     transformer = pyproj.Transformer.from_crs(srcproj, dstproj)
@@ -176,8 +177,7 @@ def writeNetCDF(infile, outdir, description, logger):
     maxlat, maxlon = transformer.transform(maxx, maxy)
     lons = np.linspace(minlon, maxlon, num=xdim)
     lats = np.linspace(minlat, maxlat, num=ydim)
-    print("writeNetCDF, Data Lon(min,max): {:.2f} {:.2f}".format(minlon, maxlon))
-    print("writeNetCDF, Data Lat(min,max): {:.2f} {:.2f}".format(minlat, maxlat))
+    print("Lon(min,max): {:.2f} {:.2f} Lat(min,max): {:.2f} {:.2f}".format(minlon, maxlon,minlat, maxlat))
 
     # Defining the parameters and metadata for UTM projection
     longitudes = nc_fid.createVariable('lon', 'f8', ('x0',))
@@ -195,15 +195,15 @@ def writeNetCDF(infile, outdir, description, logger):
     crs.latitude_of_projection_origin = 0.0
     crs.scale_factor_at_central_meridian = 0.9996
     crs.longitude_of_central_meridian = 39.0
-    crs.utm_zone_number = utmz
-    crs.datum = 'WGS84'
-    crs.epsg_code = prj
+    crs.spatial_ref = sref
+    crs.GeoTransform = gt
 
     # Scale data according to acceptable min max range
     print("writeNetCDF, {} Variable range: {} {}".format(ofile, np.amin(data[0,:,:]), np.amax(data[0,:,:])))
 
     nc_var[0, :, :] = data[0,:,:]
     nc_fid.close()
+
 
 
 def main(args: Namespace = None) -> int:
