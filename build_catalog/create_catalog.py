@@ -57,12 +57,14 @@ def get_bbox_and_footprint(logger, raster_uri):
 
 
 def pull_s3bucket(logger, tmp_dir, url, catalog_id, catalog_desc):
-    img_path = os.path.join(tmp_dir.name, 'image.tif')
+
+    endstr = os.path.splitext(url)[1]
+    img_path = os.path.join(tmp_dir.name, 'image' + endstr)
 
     try:
         urllib.request.urlretrieve(url, img_path)
     except:
-        logger.warning("Failed to retrieve {}".format(url))
+        logger.warning("Failed to retrieve {} to {}".format(url,img_path))
         sys.exit(1)
     logger.debug(pystac.Catalog.__doc__)
 
@@ -90,18 +92,22 @@ def add_item(footprint, bbox, epsg, gsd, img_path, image_id):
     # Add common metadata
     item.common_metadata.gsd = float(gsd)
 
-    # Add projection metadata
+    # Add projection metadata using projection extension
     ProjectionExtension.add_to(item)
     proj_ext = ProjectionExtension.ext(item)
-    print(item.stac_extensions)
+    #print(item.stac_extensions)
     proj_ext.epsg = int(epsg)
 
     # Add image
+    if os.path.splitext(image_id)[1] == ".nc":
+        type = pystac.MediaType.HDF5
+    else:
+        type = pystac.MediaType.COG
     item.add_asset(
         key='image',
         asset=pystac.Asset(
             href=img_path+image_id,
-            media_type=pystac.MediaType.COG
+            media_type=type
         )
     )
 
@@ -153,6 +159,13 @@ def main(args: Namespace = None) -> int:
             default=False,
         )
         parser.add_argument(
+            "-n",
+            "--netcdf",
+            help="Create records for NetCDFs rather than COGs",
+            action="store_true",
+            default=False,
+        )
+        parser.add_argument(
             "-v",
             "--verbose",
             help="Add extra information to logs.",
@@ -178,6 +191,8 @@ def main(args: Namespace = None) -> int:
     # Configuration to be loaded from main directory
     if args.test:
         CONFIGURATION_FILE_PATH = os.path.join(codedir, "test-configuration.yaml")
+    elif args.netcdf:
+        CONFIGURATION_FILE_PATH = os.path.join(codedir, "configuration-nc.yaml")
     else:
         CONFIGURATION_FILE_PATH = os.path.join(codedir, "configuration.yaml")
 
@@ -249,10 +264,14 @@ def main(args: Namespace = None) -> int:
         end_dateval = dateval
 
     # Create catalog sub_folder - delete if exists
-    if args.stac or args.collection:
-        cat_folder = os.path.join(ofolder,catalog_id + "-stac-v" + version)
+    if args.netcdf:
+        netcdf = "-nc"
     else:
-        cat_folder = os.path.join(ofolder,catalog_id + "-records-v" + version)
+        netcdf = ""
+    if args.stac or args.collection:
+        cat_folder = os.path.join(ofolder, "{}-stac{}-v{}".format(catalog_id, netcdf, version))
+    else:
+        cat_folder = os.path.join(ofolder, "{}-records{}-v{}".format(catalog_id, netcdf, version))
 
     if os.path.exists(cat_folder):
         shutil.rmtree(cat_folder)
