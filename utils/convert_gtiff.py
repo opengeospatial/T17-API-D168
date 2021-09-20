@@ -160,7 +160,8 @@ def writeNetCDF(infile, outdir, description, logger):
 
     # Global attributes are set up for each variable
     # CF Standard Names: http://cfconventions.org/standard-names.html
-    nc_var = nc_fid.createVariable('data', 'u1', ('time', 'y0', 'x0'), fill_value=null_value)
+    # Use zlib option to apply compression
+    nc_var = nc_fid.createVariable('data', 'u1', ('time', 'y0', 'x0'), fill_value=null_value, zlib=True)
     nc_var.setncatts({'long_name': u"{}".format(description),
                       'units': u'None',
                       'level_desc': u'Surface',

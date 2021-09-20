@@ -341,7 +341,7 @@ def main(args: Namespace = None) -> int:
         for file in files:
 
             # For each file, update generic record yaml
-            out_yaml = os.path.join(os.path.dirname(__file__), os.path.splitext(yaml_file)[0] + "-updated.yml")
+            out_yaml = os.path.join(os.path.dirname(__file__), os.path.splitext(os.path.basename(yaml_file))[0] + "-updated.yml")
 
             # Read YML contents
             with open(os.path.join(os.path.dirname(__file__),yaml_file)) as f:
@@ -350,12 +350,15 @@ def main(args: Namespace = None) -> int:
                 f.close()
 
             # Update bounding box
-            logger.debug("dataMap: {} ".format(dataMap['identification']['extents']['spatial']))
+            logger.info("dataMap: {} ".format(dataMap['identification']['extents']['spatial']))
             yaml_dict = {}
-            yaml_dict['bbox'] = '[{},{},{},{}]'.format(bbox[0],bbox[1],bbox[2],bbox[3])
+            fbbox = '[{:.3f},{:.3f},{:.3f},{:.3f}]'.format(bbox[0],bbox[1],bbox[2],bbox[3])
+            yaml_dict.update({'bbox': ast.literal_eval(fbbox)})
             yaml_dict.update({'crs': ast.literal_eval(dst_crs.split(":")[1])})
-            dataMap['identification']['extents']['spatial'] = yaml_dict
-            logger.debug("Modified dataMap: {} ".format(dataMap['identification']['extents']['spatial']))
+            # remove single quotes
+            res = {key.replace("'", ""):val for key, val in yaml_dict.items()}
+            dataMap['identification']['extents']['spatial'] = [res]
+            logger.info("Modified dataMap: {} ".format(dataMap['identification']['extents']['spatial']))
 
             # Update dates
             logger.debug("dataMap: {} ".format(dataMap['identification']['extents']['temporal']))
@@ -367,7 +370,7 @@ def main(args: Namespace = None) -> int:
             yaml_dict = {}
             yaml_dict.update({'begin': datestr})
             yaml_dict.update({'end': datestr})
-            dataMap['identification']['extents']['temporal'] = yaml_dict
+            dataMap['identification']['extents']['temporal'] = [yaml_dict]
             logger.debug("Modified dataMap: {} ".format(dataMap['identification']['extents']['temporal']))
 
             # Update filename
