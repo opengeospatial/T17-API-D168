@@ -1,0 +1,23 @@
+# Catalog Id
+catalog_id: "eo4sas-catalog"
+
+# Catalog description
+catalog_title: "EO4SAS Land Cover Classification Catalog"
+
+# Catalog description
+catalog_desc: "Sentinel-1 and Sentinel-2 data were used to generate a land cover classification at 10 m resolution to investigate sand dams as part of the EO4SAS project that focused on sustainable sand extraction in Kenya."
+
+#  Location of inputs files as url
+url: "https://pixalytics-ogc-api.s3.eu-west-2.amazonaws.com/EO4SAS/classification-nc/"
+
+#  Files to include in catalog
+files: "20191115T102219_classification.nc,20191220T101537_classification.nc,20200831T101156_classification.nc,20201119T104910_classification.nc,20201214T101151_classification.nc"
+
+# Spatial resolution
+gsd: "10.0"
+
+#  Output directory
+output_dir: "./ogcapi/CATALOG"
+
+# YAML for API Records
+yaml_file: "./eo4sas-record.yml"

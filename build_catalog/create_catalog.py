@@ -3,7 +3,7 @@ import sys
 
 # pystac 1.1.0 installed
 import pystac
-from pystac.extensions import label
+from pystac.extensions.projection import ProjectionExtension
 import os
 from argparse import Namespace, ArgumentParser
 import urllib.request
@@ -53,16 +53,18 @@ def get_bbox_and_footprint(logger, raster_uri):
                 [bounds[0], bounds[3]]
             ])
 
-        return bbox, mapping(footprint), dst_crs
+        return bbox, mapping(footprint), str(src.crs), dst_crs
 
 
 def pull_s3bucket(logger, tmp_dir, url, catalog_id, catalog_desc):
-    img_path = os.path.join(tmp_dir.name, 'image.tif')
+
+    endstr = os.path.splitext(url)[1]
+    img_path = os.path.join(tmp_dir.name, 'image' + endstr)
 
     try:
         urllib.request.urlretrieve(url, img_path)
     except:
-        logger.warning("Failed to retrieve {}".format(url))
+        logger.warning("Failed to retrieve {} to {}".format(url,img_path))
         sys.exit(1)
     logger.debug(pystac.Catalog.__doc__)
 
@@ -74,7 +76,7 @@ def pull_s3bucket(logger, tmp_dir, url, catalog_id, catalog_desc):
     return img_path
 
 
-def add_item(footprint, bbox, gsd, img_path, image_id):
+def add_item(footprint, bbox, epsg, gsd, img_path, image_id):
 
     fdate = image_id.split("_")[0]
     dateval = datetime(int(fdate[0:4]), int(fdate[4:6]), int(fdate[6:8]), int(fdate[9:11]), int(fdate[11:13]),
@@ -88,14 +90,24 @@ def add_item(footprint, bbox, gsd, img_path, image_id):
                        properties={})
 
     # Add common metadata
-    item.common_metadata.gsd = 10.0
+    item.common_metadata.gsd = float(gsd)
+
+    # Add projection metadata using projection extension
+    ProjectionExtension.add_to(item)
+    proj_ext = ProjectionExtension.ext(item)
+    #print(item.stac_extensions)
+    proj_ext.epsg = int(epsg)
 
     # Add image
+    if os.path.splitext(image_id)[1] == ".nc":
+        type = pystac.MediaType.HDF5
+    else:
+        type = pystac.MediaType.COG
     item.add_asset(
         key='image',
         asset=pystac.Asset(
             href=img_path+image_id,
-            media_type=pystac.MediaType.COG
+            media_type=type
         )
     )
 
@@ -147,6 +159,13 @@ def main(args: Namespace = None) -> int:
             default=False,
         )
         parser.add_argument(
+            "-n",
+            "--netcdf",
+            help="Create records for NetCDFs rather than COGs",
+            action="store_true",
+            default=False,
+        )
+        parser.add_argument(
             "-v",
             "--verbose",
             help="Add extra information to logs.",
@@ -172,6 +191,8 @@ def main(args: Namespace = None) -> int:
     # Configuration to be loaded from main directory
     if args.test:
         CONFIGURATION_FILE_PATH = os.path.join(codedir, "test-configuration.yaml")
+    elif args.netcdf:
+        CONFIGURATION_FILE_PATH = os.path.join(codedir, "configuration-nc.yaml")
     else:
         CONFIGURATION_FILE_PATH = os.path.join(codedir, "configuration.yaml")
 
@@ -243,10 +264,14 @@ def main(args: Namespace = None) -> int:
         end_dateval = dateval
 
     # Create catalog sub_folder - delete if exists
-    if args.stac or args.collection:
-        cat_folder = os.path.join(ofolder,catalog_id + "-stac-v" + version)
+    if args.netcdf:
+        netcdf = "-nc"
     else:
-        cat_folder = os.path.join(ofolder,catalog_id + "-records-v" + version)
+        netcdf = ""
+    if args.stac or args.collection:
+        cat_folder = os.path.join(ofolder, "{}-stac{}-v{}".format(catalog_id, netcdf, version))
+    else:
+        cat_folder = os.path.join(ofolder, "{}-records{}-v{}".format(catalog_id, netcdf, version))
 
     if os.path.exists(cat_folder):
         shutil.rmtree(cat_folder)
@@ -254,7 +279,7 @@ def main(args: Namespace = None) -> int:
 
     # Get image and then extract information from first object
     img_path = pull_s3bucket(logger, tmp_dir, urlpath+files[0], catalog_id, catalog_desc)
-    bbox, footprint, dst_crs = get_bbox_and_footprint(logger, img_path)
+    bbox, footprint, src_crs, dst_crs = get_bbox_and_footprint(logger, img_path)
     logger.debug("Footprint: {}".format(footprint))
 
     if args.stac or args.collection:
@@ -277,7 +302,7 @@ def main(args: Namespace = None) -> int:
             catalog = pystac.Catalog(id=catalog_id, title=catalog_title, description=catalog_desc)
 
         for file in files:
-            item = add_item(footprint, bbox, gsd, url, file)
+            item = add_item(footprint, bbox, src_crs.split(":")[1], gsd, url, file)
             catalog.add_item(item)
 
         # Update extents in catalog from items
@@ -316,7 +341,7 @@ def main(args: Namespace = None) -> int:
         for file in files:
 
             # For each file, update generic record yaml
-            out_yaml = os.path.join(os.path.dirname(__file__), os.path.splitext(yaml_file)[0] + "-updated.yml")
+            out_yaml = os.path.join(os.path.dirname(__file__), os.path.splitext(os.path.basename(yaml_file))[0] + "-updated.yml")
 
             # Read YML contents
             with open(os.path.join(os.path.dirname(__file__),yaml_file)) as f:
@@ -325,12 +350,15 @@ def main(args: Namespace = None) -> int:
                 f.close()
 
             # Update bounding box
-            logger.debug("dataMap: {} ".format(dataMap['identification']['extents']['spatial']))
+            logger.info("dataMap: {} ".format(dataMap['identification']['extents']['spatial']))
             yaml_dict = {}
-            yaml_dict['bbox'] = '[{},{},{},{}]'.format(bbox[0],bbox[1],bbox[2],bbox[3])
+            fbbox = '[{:.3f},{:.3f},{:.3f},{:.3f}]'.format(bbox[0],bbox[1],bbox[2],bbox[3])
+            yaml_dict.update({'bbox': ast.literal_eval(fbbox)})
             yaml_dict.update({'crs': ast.literal_eval(dst_crs.split(":")[1])})
-            dataMap['identification']['extents']['spatial'] = yaml_dict
-            logger.debug("Modified dataMap: {} ".format(dataMap['identification']['extents']['spatial']))
+            # remove single quotes
+            res = {key.replace("'", ""):val for key, val in yaml_dict.items()}
+            dataMap['identification']['extents']['spatial'] = [res]
+            logger.info("Modified dataMap: {} ".format(dataMap['identification']['extents']['spatial']))
 
             # Update dates
             logger.debug("dataMap: {} ".format(dataMap['identification']['extents']['temporal']))
@@ -342,7 +370,7 @@ def main(args: Namespace = None) -> int:
             yaml_dict = {}
             yaml_dict.update({'begin': datestr})
             yaml_dict.update({'end': datestr})
-            dataMap['identification']['extents']['temporal'] = yaml_dict
+            dataMap['identification']['extents']['temporal'] = [yaml_dict]
             logger.debug("Modified dataMap: {} ".format(dataMap['identification']['extents']['temporal']))
 
             # Update filename
