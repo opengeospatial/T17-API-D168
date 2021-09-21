@@ -29,8 +29,13 @@ try:
         my_region = config["my_region"]
         my_service = config["my_service"]
         my_eshost = config["my_eshost"]
-        index = config["index"]
         catalog = config["catalog"]
+        splits = catalog.split("-")
+        if splits[3] == "nc":
+            index = "{}-index-nc".format(splits[2])
+        else:
+            index = "{}-index".format(splits[2])
+        print("Uploading to {}".format(index))
         # S3 bucket
         bucket = config["bucket"]
 
