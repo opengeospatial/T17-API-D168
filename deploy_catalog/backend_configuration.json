@@ -1,0 +1,46 @@
+{
+	"server": {
+		"title": "TB-17 Experiments API Python Server",
+		"description": "TB-17 Experiments API Python Server"
+	},
+	"backends": [
+		{
+	    "id": "cuberworxWFS_Foundation",
+            "type": "WFS",
+	    "config": {
+				"baseURL": "https://test.cubewerx.com/cubewerx/cubeserv/demo?datastore=Foundation",
+				"types": {
+					"cw:coastl_1m": {
+						"temporalProperty": null
+					}
+				}
+			},
+			"collections": [
+				"cw:coastl_1m"
+			]
+		},
+		{
+	    "id": "api_records_collection",
+            "type": "Elasticsearch",
+			"config": {
+				"baseURL": "search-ogc-t17-d168-yhvlgzft2zhuvdssiaejkyq5lq.eu-west-2.es.amazonaws.com",
+				"port": 443,
+				"useSSL": true,
+				"types": {
+					"record-index": {
+						"temporalProperty": "extents.temporal.interval",
+						"description": "a collection of api records items",
+						"title": "api records",
+						"bbox": [-180.0,-90.0,180.0,90.0]
+					}
+				},
+				"awsAuth": {
+					"region": "eu-west-2"
+				}
+			},
+			"collections": [
+				"record-index"
+			]
+		}
+	]
+}
