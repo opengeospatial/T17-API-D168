@@ -41,6 +41,29 @@
 			"collections": [
 				"record-index"
 			]
+		},
+		{
+	    "id": "api_stac_collection",
+            "type": "Elasticsearch",
+			"config": {
+				"baseURL": "search-ogc-t17-d168-yhvlgzft2zhuvdssiaejkyq5lq.eu-west-2.es.amazonaws.com",
+				"port": 443,
+				"useSSL": true,
+				"types": {
+					"stac-index": {
+						"temporalProperty": "extents.temporal.interval",
+						"description": "a collection of stac items",
+						"title": "stac records",
+						"bbox": [-180.0,-90.0,180.0,90.0]
+					}
+				},
+				"awsAuth": {
+					"region": "eu-west-2"
+				}
+			},
+			"collections": [
+				"stac-index"
+			]
 		}
 	]
 }
