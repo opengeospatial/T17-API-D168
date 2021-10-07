@@ -20,7 +20,7 @@
 			]
 		},
 		{
-	    "id": "api_records_collection",
+	    "id": "eo4sas-catalog_api_records_collection",
             "type": "Elasticsearch",
 			"config": {
 				"baseURL": "search-ogc-t17-d168-yhvlgzft2zhuvdssiaejkyq5lq.eu-west-2.es.amazonaws.com",
@@ -29,8 +29,8 @@
 				"types": {
 					"record-index": {
 						"temporalProperty": "extents.temporal.interval",
-						"description": "a collection of api records items",
-						"title": "api records",
+						"description": "Sentinel-1 and Sentinel-2 data were used to generate a land cover classification at 10 m resolution to investigate sand dams as part of the EO4SAS project that focused on sustainable sand extraction in Kenya.",
+						"title": "EO4SAS Land Cover Classification Catalog: api records",
 						"bbox": [-180.0,-90.0,180.0,90.0]
 					}
 				},
@@ -43,7 +43,7 @@
 			]
 		},
 		{
-	    "id": "api_stac_collection",
+	    "id": "eo4sas-catalog_api_stac_collection",
             "type": "Elasticsearch",
 			"config": {
 				"baseURL": "search-ogc-t17-d168-yhvlgzft2zhuvdssiaejkyq5lq.eu-west-2.es.amazonaws.com",
@@ -52,8 +52,8 @@
 				"types": {
 					"stac-index": {
 						"temporalProperty": "extents.temporal.interval",
-						"description": "a collection of stac items",
-						"title": "stac records",
+						"description": "Sentinel-1 and Sentinel-2 data were used to generate a land cover classification at 10 m resolution to investigate sand dams as part of the EO4SAS project that focused on sustainable sand extraction in Kenya.",
+						"title": "EO4SAS Land Cover Classification Catalog: stac records",
 						"bbox": [-180.0,-90.0,180.0,90.0]
 					}
 				},
