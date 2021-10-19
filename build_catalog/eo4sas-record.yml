@@ -22,7 +22,7 @@ identification:
     abstract: abstract
     keywords:
         default:
-            keywords_en: [eo4sas,classification,geotiff]
+            keywords_en: [eo4sas,classification]
             keywords_type: theme
     topiccategory:
         - LandUse
