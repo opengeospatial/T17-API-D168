@@ -1,0 +1,69 @@
+{
+	"server": {
+		"title": "TB-17 Experiments API Python Server",
+		"description": "TB-17 Experiments API Python Server"
+	},
+	"backends": [
+		{
+	    "id": "cuberworxWFS_Foundation",
+            "type": "WFS",
+	    "config": {
+				"baseURL": "https://test.cubewerx.com/cubewerx/cubeserv/demo?datastore=Foundation",
+				"types": {
+					"cw:coastl_1m": {
+						"temporalProperty": null
+					}
+				}
+			},
+			"collections": [
+				"cw:coastl_1m"
+			]
+		},
+		{
+	    "id": "eo4sas-catalog_api_records_collection",
+            "type": "Elasticsearch",
+			"config": {
+				"baseURL": "search-ogc-t17-d168-yhvlgzft2zhuvdssiaejkyq5lq.eu-west-2.es.amazonaws.com",
+				"port": 443,
+				"useSSL": true,
+				"types": {
+					"record-index": {
+						"temporalProperty": "extents.temporal.interval",
+						"description": "Sentinel-1 and Sentinel-2 data were used to generate a land cover classification at 10 m resolution to investigate sand dams as part of the EO4SAS project that focused on sustainable sand extraction in Kenya.",
+						"title": "EO4SAS Land Cover Classification Catalog: api records",
+						"bbox": [-180.0,-90.0,180.0,90.0]
+					}
+				},
+				"awsAuth": {
+					"region": "eu-west-2"
+				}
+			},
+			"collections": [
+				"record-index"
+			]
+		},
+		{
+	    "id": "eo4sas-catalog_api_stac_collection",
+            "type": "Elasticsearch",
+			"config": {
+				"baseURL": "search-ogc-t17-d168-yhvlgzft2zhuvdssiaejkyq5lq.eu-west-2.es.amazonaws.com",
+				"port": 443,
+				"useSSL": true,
+				"types": {
+					"stac-index": {
+						"temporalProperty": "extents.temporal.interval",
+						"description": "Sentinel-1 and Sentinel-2 data were used to generate a land cover classification at 10 m resolution to investigate sand dams as part of the EO4SAS project that focused on sustainable sand extraction in Kenya.",
+						"title": "EO4SAS Land Cover Classification Catalog: stac records",
+						"bbox": [-180.0,-90.0,180.0,90.0]
+					}
+				},
+				"awsAuth": {
+					"region": "eu-west-2"
+				}
+			},
+			"collections": [
+				"stac-index"
+			]
+		}
+	]
+}

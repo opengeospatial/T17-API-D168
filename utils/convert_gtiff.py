@@ -16,6 +16,7 @@ import logging
 home = os.path.expanduser("~")
 print("Home directory: {}".format(home))
 gdal_home = os.path.join(home, "anaconda3/envs/rsgislib_dev/bin")
+python = os.path.join(home, "anaconda3/envs/rsgislib_dev/bin/python")
 
 # Run external shell command
 def execmd(command):
@@ -54,7 +55,7 @@ def read_geotiff(file):
         return darray, geotransform, wkt
 
 
-def writeNetCDF(infile, outdir, description, logger):
+def writeNetCDF(infile, outdir, description, logger, datelist=False):
     """
     Writes a data array to a given file along with the relevant metadata for each array being written to file
 
@@ -112,7 +113,10 @@ def writeNetCDF(infile, outdir, description, logger):
     nc_fid.history = 'Created ' + time.ctime(time.time())
     nc_fid.time_coverage_start = sub_element
     nc_fid.time_coverage_end = sub_element
-    nc_fid.time_coverage_duration = "1 day"
+    if datelist:
+        nc_fid.time_coverage_duration = "{} days".format(len(datelist))
+    else:
+        nc_fid.time_coverage_duration = "1 day"
     nc_fid.source = 'Pixalytics Ltd'
     nc_fid.product_version = "Version " + version
     x = uuid.uuid1()
@@ -128,7 +132,11 @@ def writeNetCDF(infile, outdir, description, logger):
     nc_fid.creator_url = "https://www.pixalytics.com"
 
     # Dimensions - 3D, time plus number of rows and columns
-    nc_fid.createDimension('time', 1)
+    if datelist:
+        nc_fid.createDimension('time', len(datelist))
+    else:
+        nc_fid.createDimension('time', 1)
+
     nc_fid.createDimension('x0', lons.shape[0])
     nc_fid.createDimension('y0', lats.shape[0])
 
@@ -152,8 +160,11 @@ def writeNetCDF(infile, outdir, description, logger):
     # Temporal attribute setting
     times = nc_fid.createVariable('time', 'f8', ('time',))
     times.units = 'hours since 0001-01-01 00:00:00'
-    ctime = date2num(date, times.units, calendar='gregorian')
-    times[:] = [ctime]
+    if datelist:
+        times[:] = datelist[:]
+    else:
+        ctime = date2num(date, times.units, calendar='gregorian')
+        times[:] = [ctime]
     times.calendar = 'gregorian'  # variables
     times.axis = 'T'
     times.standard_name = 'time'
@@ -202,7 +213,10 @@ def writeNetCDF(infile, outdir, description, logger):
     # Scale data according to acceptable min max range
     print("writeNetCDF, {} Variable range: {} {}".format(ofile, np.amin(data[0,:,:]), np.amax(data[0,:,:])))
 
-    nc_var[0, :, :] = data[0,:,:]
+    if datelist:
+        nc_var[:, :, :] = data[:, :, :]
+    else:
+        nc_var[0, :, :] = data[0,:,:]
     nc_fid.close()
 
 
@@ -242,6 +256,13 @@ def main(args: Namespace = None) -> int:
             default=False,
         )
         parser.add_argument(
+            "-s",
+            "--single",
+            help="Convert to single NetCDF rather than one per GeoTIFF.",
+            action="store_true",
+            default=False,
+        )
+        parser.add_argument(
             "-v",
             "--verbose",
             help="Add extra information to logs.",
@@ -257,6 +278,10 @@ def main(args: Namespace = None) -> int:
     logger = logging.getLogger(program)
     logger.setLevel(logging.DEBUG if "verbose" in args and args.verbose else logging.INFO)
 
+    # Create output directory if does not exist
+    if not os.path.exists(args.outdir):
+        os.mkdir(args.outdir)
+
     # Reform any input GeoTIFFs to COGs
     if args.rgb:
         searchstr = os.path.join(args.indir, "*_rgb_classification.tif")
@@ -268,14 +293,44 @@ def main(args: Namespace = None) -> int:
         logger.info("Could not find any input files in {}".format(args.indir))
         sys.exit(1)
 
-    if args.netcdf:
+    if args.netcdf or args.single:
         logger.info("Converting TIFFs to NetCDF format")
     else:
         logger.info("Converting TIFFs to COG format")
 
+    # Merge GeoTiFFs into stacked array
+    if args.single:
+        intiffs = ""
+        datelist = []
+        for count,infile in enumerate(infiles):
+            intiffs += " {}".format(infile)
+
+            # Extract date from filename
+            elements = os.path.basename(infile).split("_")
+            sub_element = elements[0]
+            if count == 0:
+                start_element = elements[0]
+            date = dt.datetime(int(sub_element[0:4]), int(sub_element[4:6]), int(sub_element[6:8]))
+            ctime = date2num(date, 'hours since 0001-01-01 00:00:00', calendar='gregorian')
+            print("Date: {} as {}".format(sub_element, ctime))
+            datelist.append(ctime)
+
+        outfile = os.path.join(args.outdir,"{}-{}_{}".format(start_element, elements[0], elements[1]))
+        cmd = "{} {}/gdal_merge.py -separate -o {} {}".format(python, gdal_home, outfile, intiffs)
+        if not os.path.exists(outfile):
+            print(cmd)
+            execmd(cmd)
+        infiles = []
+        infiles.append(outfile)
+
+    # Convert input files to COGs or NetCDFs
     for infile in infiles:
-        if args.netcdf: # Conversion to NetCDF
-            writeNetCDF(infile, args.outdir, 'EO4SAS Land Cover Classification', logger)
+        if args.netcdf or args.single: # Conversion to NetCDF
+            if args.single:
+                print("Creating NetCDF from {}".format(outfile))
+                writeNetCDF(outfile, args.outdir, 'EO4SAS Land Cover Classification', logger, datelist=datelist)
+            else:
+                writeNetCDF(infile, args.outdir, 'EO4SAS Land Cover Classification', logger)
         else: # Conversion to COG
             cmd = "{}/gladdo -r nearest {} 2 4 8 16 32 64 128 256 512".format(gdal_home, infile)
             execmd(cmd)

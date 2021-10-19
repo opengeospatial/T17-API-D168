@@ -166,16 +166,16 @@ def main(args: Namespace = None) -> int:
             default=False,
         )
         parser.add_argument(
-            "-v",
-            "--verbose",
-            help="Add extra information to logs.",
+            "-ns",
+            "--netcdfsingle",
+            help="Create record for single NetCDF that has stacked GeoTIFFs",
             action="store_true",
             default=False,
         )
         parser.add_argument(
-            "-y",
-            "--yml",
-            help="Update input yaml for API-Records.",
+            "-v",
+            "--verbose",
+            help="Add extra information to logs.",
             action="store_true",
             default=False,
         )
@@ -193,6 +193,8 @@ def main(args: Namespace = None) -> int:
         CONFIGURATION_FILE_PATH = os.path.join(codedir, "test-configuration.yaml")
     elif args.netcdf:
         CONFIGURATION_FILE_PATH = os.path.join(codedir, "configuration-nc.yaml")
+    elif args.netcdfsingle:
+        CONFIGURATION_FILE_PATH = os.path.join(codedir, "configuration-nc-single.yaml")
     else:
         CONFIGURATION_FILE_PATH = os.path.join(codedir, "configuration.yaml")
 
@@ -254,7 +256,11 @@ def main(args: Namespace = None) -> int:
         dateval = datetime(int(fdate[0:4]), int(fdate[4:6]), int(fdate[6:8]), int(fdate[9:11]), int(fdate[11:13]),
                            int(fdate[13:15]))
 
-    if len(files) > 1: # If more than one file
+    if args.netcdfsingle:
+        fdate = fdate.split("-")[1]
+        end_dateval = datetime(int(fdate[0:4]), int(fdate[4:6]), int(fdate[6:8]), int(fdate[9:11]), int(fdate[11:13]),
+                           int(fdate[13:15]))
+    elif len(files) > 1: # If more than one file
         fdate = files[len(files) - 1].split("_")[0]
         end_dateval = datetime(int(fdate[0:4]), int(fdate[4:6]), int(fdate[6:8]), int(fdate[9:11]),
                                int(fdate[11:13]),
@@ -262,10 +268,13 @@ def main(args: Namespace = None) -> int:
 
     else:
         end_dateval = dateval
+    print("Date range {} to {}".format(dateval, end_dateval))
 
     # Create catalog sub_folder - delete if exists
     if args.netcdf:
         netcdf = "-nc"
+    elif args.netcdfsingle:
+        netcdf = "-nc-single"
     else:
         netcdf = ""
     if args.stac or args.collection:
@@ -366,10 +375,14 @@ def main(args: Namespace = None) -> int:
             dateval = datetime(int(fdate[0:4]), int(fdate[4:6]), int(fdate[6:8]), int(fdate[9:11]), int(fdate[11:13]),
                                int(fdate[13:15]))
             datestr = dateval.strftime("%Y-%m-%d")
+            if args.netcdfsingle:
+                end_datestr = end_dateval.strftime("%Y-%m-%d")
+            else:
+                end_datestr = datestr
 
             yaml_dict = {}
             yaml_dict.update({'begin': datestr})
-            yaml_dict.update({'end': datestr})
+            yaml_dict.update({'end': end_datestr})
             dataMap['identification']['extents']['temporal'] = [yaml_dict]
             logger.debug("Modified dataMap: {} ".format(dataMap['identification']['extents']['temporal']))
 
@@ -378,14 +391,25 @@ def main(args: Namespace = None) -> int:
             dataMap['metadata']['dataseturi'] = url+file
             logger.debug("Modified dataMap: {} ".format(dataMap['metadata']['dataseturi']))
 
+            # Updated url and file type
+            dataMap['distribution']['s3']['url'] = url+file
+            if os.path.splitext(file) == "tif":
+                dataMap['distribution']['s3']['type'] = 'GeoTIFF'
+            else:
+                dataMap['distribution']['s3']['type'] = 'NetCDF'
+            logger.debug("Modified dataMap: {} {} ".format(dataMap['distribution']['s3']['type'], dataMap['distribution']['s3']['url']))
+
             # Remove single quotes
             dataDict = {re.sub("'", "", key): val for key, val in dataMap.items()}
 
+            #for key, val in dataMap.items():
+            #    print(key,val)
+            #sys.exit(1)
+
             # Output modified version
-            if args.yml:
-                with open(out_yaml, 'w') as f:
-                    yaml.dump(dataDict, f)
-                    f.close()
+            with open(out_yaml, 'w') as f:
+                yaml.dump(dataDict, f)
+                f.close()
 
             # Read YML from disk
             mcf_dict = read_mcf(out_yaml)
