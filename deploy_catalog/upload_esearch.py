@@ -31,11 +31,13 @@ try:
         my_eshost = config["my_eshost"]
         catalog = config["catalog"]
         splits = catalog.split("-")
-        if splits[3] == "nc":
+        if splits[4] == "single":
+            index = "{}-index-nc-single".format(splits[2])
+        elif splits[3] == "nc":
             index = "{}-index-nc".format(splits[2])
         else:
             index = "{}-index".format(splits[2])
-        print("Uploading to {}".format(index))
+        print("Linking to Elasticsearch index: {}".format(index))
         # S3 bucket
         bucket = config["bucket"]
 
@@ -128,7 +130,7 @@ def load_s3(ctx, index, bucket, folder):
 
             count += 1
     if count == 0:
-        print("No files matched to upload")
+        print("No files matched on S3 bucket to upload")
     else:
         print("Completed uploading")
 
@@ -199,7 +201,7 @@ def main(ctx, **opts):
         print("all fields: {}".format(list(schema.keys())))
 
         # Get first document in index
-        result = es.get(index=index, id=1)
+        result = es.get(index=index, id=0)
         print("First id for {}: {}".format(index,result))
 
         body = {'query': {'bool': {'must': [{'match': {'type': 'Feature'}}]}}}

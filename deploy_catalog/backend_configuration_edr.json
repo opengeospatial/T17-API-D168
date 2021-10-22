@@ -1,0 +1,40 @@
+{
+	"server": {
+		"title": "TB-17 Experiments API Python Server",
+		"description": "TB-17 Experiments API Python Server"
+	},
+	"backends": [
+		{
+			"id": "example_netcdf_backend",
+			"type": "NETCDF",
+			"config": {
+				"collections": {
+					"netcdf_collection": {
+						"title": "Sample NetCDF Collection",
+						"description": "this is a sample NetCDF collection",
+						"instances": {
+							"instanceA": {
+								"title": "Sample NetCDF Instance A",
+								"description": "this is a sample instance of a sample NetCDF collection ",
+								"bbox": [
+									-180.0,
+									-90.0,
+									180.0,
+									90.0
+								],
+								"timeinterval": [
+									"2000-01-01",
+									"2021-01-01"
+								],
+								"filePath": "https://s3.console.aws.amazon.com/s3/object/pixalytics-ogc-api?region=eu-west-2&prefix=EO4SAS/classification-nc/20191115T102219-20201214T101151_classification.nc"
+							}
+						}
+					}
+				}
+			},
+			"collections": [
+				"netcdf_collection"
+			]
+		}
+	]
+}
