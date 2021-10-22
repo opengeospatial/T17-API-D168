@@ -66,3 +66,32 @@ An example configuration files is provide as
 
 Utilities used to support file conversion from GeoTiFF to COG or NetCDF.
 
+## Example outputs
+
+### Static deployment via AWS S3 bucket
+
+Version 0-8 catalogs with multiple objects. A public access S3 bucket has been set up and contains both the catalogs and imagery:
+
+* STAC collection catalog v0-8 created using pystac for GeoTiFFs:
+  * main JSON: https://pixalytics-ogc-api.s3.eu-west-2.amazonaws.com/eo4sas-catalog-stac-v0-8/collection.json
+  * image JSONs, e.g. https://pixalytics-ogc-api.s3.eu-west-2.amazonaws.com/eo4sas-catalog-stac-v0-8/20200831T101156_rgb_classification/20200831T101156_rgb_classification.json
+
+* STAC collection catalog v0-8 created using pystac for NetCDFs:
+  * main JSON: https://pixalytics-ogc-api.s3.eu-west-2.amazonaws.com/eo4sas-catalog-stac-nc-v0-8/collection.json
+
+* OGC API Records catalog v0-8 created using pygeometa for GeoTiFFs:
+  * main JSON: https://pixalytics-ogc-api.s3.eu-west-2.amazonaws.com/eo4sas-catalog-records-v0-8/catalog.json
+  * image JSONs e.g.: https://pixalytics-ogc-api.s3.eu-west-2.amazonaws.com/eo4sas-catalog-records-v0-8/eo4sas-record1.json
+
+* OGC API Records catalog v0-8 created using pygeometa for NetCDFs:
+  * main JSON: https://pixalytics-ogc-api.s3.eu-west-2.amazonaws.com/eo4sas-catalog-records-nc-v0-8/catalog.json
+
+### Dynamic catalogs deployed using the D165 server
+
+D165 server has its own GitHub repository at https://github.com/opengeospatial/T17-API-D165
+
+OGC API - Features server with three catalogs (Cubewerx alongside Elasticsearch versions of Records and STAC GeoTiFF catalogs):
+* http://ogcapi.pixalytics.com:8080/
+
+OGI API - EDR implementation with a single multi time-step NetCDF:
+* http://ogcapiedr.pixalytics.com:8080/
