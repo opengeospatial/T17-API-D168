@@ -88,7 +88,7 @@ Version 0-8 catalogs with multiple objects. A public access S3 bucket has been s
 
 ### Dynamic catalogs deployed using the D165 server
 
-D165 server has its own GitHub repository at 
+D165 server has its own GitHub repository at https://github.com/opengeospatial/T17-API-D165
 
 OGC API - Features server with three catalogs (Cubewerx alongside Elasticsearch versions of Records and STAC GeoTiFF catalogs):
 * http://ogcapi.pixalytics.com:8080/
