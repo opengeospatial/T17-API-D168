@@ -20,7 +20,7 @@ Install pystac with the validation optional requirement (e.g. pip install pystac
 
 OR if you want to further edit the code, setup pygeometa in develop mode: 
 
-`git clone https://github.com/pixalytics-ltd/pygeometa.git`
+`git clone https://github.com/pixalytics-ltd/pygeometa.git@t17-rcatalog`
 
 `cd pygeometa`
 
