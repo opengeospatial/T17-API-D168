@@ -51,3 +51,18 @@ run_docker_background_user:
 # EDR server
 run_docker_background_edr:
 	docker run -d --expose 8443 -p 8443:443/tcp -p 8080:8080/tcp -v ~/.aws/credentials:/root/.aws/credentials:ro -v ~/ogcapi_testbed17_dataset_d168/deploy_catalog/backend_configuration.json:/usr/src/app/backend_configuration_edr.json $(DOCKER_REPO)/$(DOCKER_IMAGE_EDR)
+
+## Running container for catalog deployment api server
+# 8080 HTTP interface 8443 HTTPS interface
+run_docker_default:
+	docker run --expose 8443 -p 8443:443/tcp -p 8080:8080/tcp -v ~/.aws/credentials:/root/.aws/credentials:ro -v ~/ogcapi_testbed17_dataset_d168/deploy_catalog/backend_configuration.json:/usr/src/app/backend_configuration.json $(DOCKER_REPO)/$(DOCKER_IMAGE)
+run_docker_background_default:
+	docker run -d --expose 8443 -p 8443:443/tcp -p 8080:8080/tcp -v ~/.aws/credentials:/root/.aws/credentials:ro -v ~/ogcapi_testbed17_dataset_d168/deploy_catalog/backend_configuration.json:/usr/src/app/backend_configuration.json $(DOCKER_REPO)/$(DOCKER_IMAGE)
+run_docker_user:
+	docker run -p 8080:8080 --env AWS_PROFILE=user -v ~/.aws/credentials:/root/.aws/credentials:ro -v ~/ogcapi_testbed17_dataset_d168/deploy_catalog/backend_configuration.json:/usr/src/app/backend_configuration.json $(DOCKER_REPO)/$(DOCKER_IMAGE)
+run_docker_background_user:
+	docker run -d -p 8080:8080 --env AWS_PROFILE=user -v ~/.aws/credentials:/root/.aws/credentials:ro -v ~/ogcapi_testbed17_dataset_d168/deploy_catalog/backend_configuration.json:/usr/src/app/backend_configuration.json $(DOCKER_REPO)/$(DOCKER_IMAGE)
+
+# EDR server
+run_docker_background_edr:
+	docker run -d --expose 8443 -p 8443:443/tcp -p 8080:8080/tcp -v ~/.aws/credentials:/root/.aws/credentials:ro -v ~/ogcapi_testbed17_dataset_d168/deploy_catalog/backend_configuration.json:/usr/src/app/backend_configuration_edr.json $(DOCKER_REPO)/$(DOCKER_IMAGE_EDR)
