@@ -5,8 +5,9 @@ import sys
 import pystac
 from pystac.extensions.projection import ProjectionExtension
 import os
-from argparse import Namespace, ArgumentParser
-import urllib.request
+from argparse import ArgumentParser
+from urllib.request import urlretrieve
+from urllib.error import URLError
 from tempfile import TemporaryDirectory
 import rasterio
 from rasterio.warp import transform_bounds
@@ -16,12 +17,13 @@ import json
 import ast
 import re
 # Pixalytics version of repository, from https://github.com/geopython/pygeometa
-from pygeometa.core import read_mcf, render_j2_template
+from pygeometa.core import read_mcf
 from pygeometa.schemas.ogc_api_dataset_record import OGCAPIDRecordOutputSchema
 from pygeometa.schemas.ogc_api_records import OGCAPIRecordOutputSchema
 
 import yaml
 import logging
+
 
 # Need to transform to EPSG4326 as other projections not allowed by GeoJSON format
 def get_bbox_and_footprint(logger, raster_uri):
@@ -57,14 +59,13 @@ def get_bbox_and_footprint(logger, raster_uri):
 
 
 def pull_s3bucket(logger, tmp_dir, url, catalog_id, catalog_desc):
-
     endstr = os.path.splitext(url)[1]
     img_path = os.path.join(tmp_dir.name, 'image' + endstr)
 
     try:
-        urllib.request.urlretrieve(url, img_path)
-    except:
-        logger.warning("Failed to retrieve {} to {}".format(url,img_path))
+        urlretrieve(url, img_path)
+    except URLError:
+        logger.warning("Failed to retrieve {} to {}".format(url, img_path))
         sys.exit(1)
     logger.debug(pystac.Catalog.__doc__)
 
@@ -77,7 +78,6 @@ def pull_s3bucket(logger, tmp_dir, url, catalog_id, catalog_desc):
 
 
 def add_item(footprint, bbox, epsg, gsd, img_path, image_id):
-
     fdate = image_id.split("_")[0]
     dateval = datetime(int(fdate[0:4]), int(fdate[4:6]), int(fdate[6:8]), int(fdate[9:11]), int(fdate[11:13]),
                        int(fdate[13:15]))
@@ -95,19 +95,18 @@ def add_item(footprint, bbox, epsg, gsd, img_path, image_id):
     # Add projection metadata using projection extension
     ProjectionExtension.add_to(item)
     proj_ext = ProjectionExtension.ext(item)
-    #print(item.stac_extensions)
     proj_ext.epsg = int(epsg)
 
     # Add image
     if os.path.splitext(image_id)[1] == ".nc":
-        type = pystac.MediaType.HDF5
+        file_type = pystac.MediaType.HDF5
     else:
-        type = pystac.MediaType.COG
+        file_type = pystac.MediaType.COG
     item.add_asset(
         key='image',
         asset=pystac.Asset(
-            href=img_path+image_id,
-            media_type=type
+            href=img_path + image_id,
+            media_type=file_type
         )
     )
 
@@ -117,89 +116,85 @@ def add_item(footprint, bbox, epsg, gsd, img_path, image_id):
     return item
 
 
-def main(args: Namespace = None) -> int:
-    if args is None:
-        parser = ArgumentParser(
-            description="Creates STAC Catalog (as Collection or Catalog) or OGC Records Catalog",
-            epilog="Should be run in the 'ogcapi' environment",
-        )
-        parser.add_argument(
-            "-u",
-            "--url",
-            type=str,
-            dest="url",
-            help="Input url",
-        )
-        parser.add_argument(
-            "-o",
-            "--outdir",
-            type=str,
-            dest="outdir",
-            help="Output data folder",
-        )
-        parser.add_argument(
-            "-t",
-            "--test",
-            help="Run in test mode",
-            action="store_true",
-            default=False,
-        )
-        parser.add_argument(
-            "-s",
-            "--stac",
-            help="Create STAC catalog",
-            action="store_true",
-            default=False,
-        )
-        parser.add_argument(
-            "-c",
-            "--collection",
-            help="Create STAC collection",
-            action="store_true",
-            default=False,
-        )
-        parser.add_argument(
-            "-n",
-            "--netcdf",
-            help="Create records for NetCDFs rather than COGs",
-            action="store_true",
-            default=False,
-        )
-        parser.add_argument(
-            "-ns",
-            "--netcdfsingle",
-            help="Create record for single NetCDF that has stacked GeoTIFFs",
-            action="store_true",
-            default=False,
-        )
-        parser.add_argument(
-            "-v",
-            "--verbose",
-            help="Add extra information to logs.",
-            action="store_true",
-            default=False,
-        )
+def main():
+    parser = ArgumentParser(
+        description="Creates STAC Catalog (as Collection or Catalog) or OGC Records Catalog",
+        epilog="Should be run in the 'ogcapi' environment",
+    )
+    parser.add_argument(
+        "-u",
+        "--url",
+        type=str,
+        dest="url",
+        help="Input url",
+    )
+    parser.add_argument(
+        "-o",
+        "--outdir",
+        type=str,
+        dest="outdir",
+        help="Output data folder",
+    )
+    parser.add_argument(
+        "-t",
+        "--test",
+        help="Run in test mode",
+        action="store_true",
+        default=False,
+    )
+    parser.add_argument(
+        "-s",
+        "--stac",
+        help="Create STAC catalog",
+        action="store_true",
+        default=False,
+    )
+    parser.add_argument(
+        "-c",
+        "--collection",
+        help="Create STAC collection",
+        action="store_true",
+        default=False,
+    )
+    parser.add_argument(
+        "-n",
+        "--netcdf",
+        help="Create records for NetCDFs rather than COGs",
+        action="store_true",
+        default=False,
+    )
+    parser.add_argument(
+        "-ns",
+        "--netcdfsingle",
+        help="Create record for single NetCDF that has stacked GeoTIFFs",
+        action="store_true",
+        default=False,
+    )
+    parser.add_argument(
+        "-v",
+        "--verbose",
+        help="Add extra information to logs.",
+        action="store_true",
+        default=False,
+    )
 
     # define arguments
     args = parser.parse_args()
 
     # Start logging
-    codedir, program = os.path.split(__file__)
+    code_dir, program = os.path.split(__file__)
     logger = logging.getLogger(program)
     logger.setLevel(logging.DEBUG if "verbose" in args and args.verbose else logging.INFO)
 
     # Configuration to be loaded from main directory
     if args.test:
-        CONFIGURATION_FILE_PATH = os.path.join(codedir, "test-configuration.yaml")
+        CONFIGURATION_FILE_PATH = os.path.join(code_dir, "test-configuration.yaml")
     elif args.netcdf:
-        CONFIGURATION_FILE_PATH = os.path.join(codedir, "configuration-nc.yaml")
+        CONFIGURATION_FILE_PATH = os.path.join(code_dir, "configuration-nc.yaml")
     elif args.netcdfsingle:
-        CONFIGURATION_FILE_PATH = os.path.join(codedir, "configuration-nc-single.yaml")
+        CONFIGURATION_FILE_PATH = os.path.join(code_dir, "configuration-nc-single.yaml")
     else:
-        CONFIGURATION_FILE_PATH = os.path.join(codedir, "configuration.yaml")
-
-    if not os.path.exists(CONFIGURATION_FILE_PATH):
-        logger.info("Configuration file is missing")
+        CONFIGURATION_FILE_PATH = os.path.join(code_dir, "configuration.yaml")
 
     try:
         with open(CONFIGURATION_FILE_PATH, "r") as config_file:
@@ -213,37 +208,39 @@ def main(args: Namespace = None) -> int:
             out_default = config["output_dir"]
             gsd = config["gsd"]
             yaml_file = config["yaml_file"]
+            provider_name = config["provider_name"]
+            provider_url = config["provider_url"]
 
             logging.debug("Configuration was loaded from '{}'.".format(CONFIGURATION_FILE_PATH))
-    except Exception:
-        logging.warning("Unable to load default configuration from '{}', relying on input variables.".format(CONFIGURATION_FILE_PATH))
+    except (FileNotFoundError, IOError):
+        logging.warning("Unable to load default configuration from '{}', relying on input variables.".format(
+            CONFIGURATION_FILE_PATH))
         sys.exit(1)
 
     # Setup S3 bucket url
     if args.url:
-        urlpath = (args.url)
+        urlpath = args.url
     else:
-        urlpath = (url)
+        urlpath = url
 
     # Temp directory
     tmp_dir = TemporaryDirectory()
 
     # Setup output folder
-    ofolder = "Folder-Not-Set"
     if args.outdir:
-        ofolder = args.outdir
+        outdir = args.outdir
     else:
-        ofolder = out_default
+        outdir = out_default
 
-    if not os.path.exists(ofolder):
-        if not os.path.islink(ofolder):
-            print("Output folder {} does not exists, creating".format(ofolder))
-            os.makedirs(ofolder)
+    if not os.path.exists(outdir):
+        if not os.path.islink(outdir):
+            print("Output folder {} does not exists, creating".format(outdir))
+            os.makedirs(outdir)
 
     # Version
-    f = open(os.path.join(os.path.dirname(__file__),'__init__.py'), "r")
+    f = open(os.path.join(os.path.dirname(__file__), '__init__.py'), "r")
     version_file = f.read()
-    version_line = re.search(r"^__version__ = ['\"]([^'\"]*)['\"]",version_file, re.M)
+    version_line = re.search(r"^__version__ = ['\"]([^'\"]*)['\"]", version_file, re.M)
     logger.info("Running {}".format(version_line.group()))
     version = version_line.group().split("'")[1]
 
@@ -251,23 +248,19 @@ def main(args: Namespace = None) -> int:
     # Add item to catalog
     if args.test:
         dateval = datetime.utcnow()
+        end_dateval = dateval
     else:
         fdate = files[0].split("_")[0]
         dateval = datetime(int(fdate[0:4]), int(fdate[4:6]), int(fdate[6:8]), int(fdate[9:11]), int(fdate[11:13]),
                            int(fdate[13:15]))
 
-    if args.netcdfsingle:
-        fdate = fdate.split("-")[1]
+        if args.netcdfsingle:
+            fdate = fdate.split("-")[1]
+        elif len(files) > 1:  # If more than one file
+            fdate = files[len(files) - 1].split("_")[0]
         end_dateval = datetime(int(fdate[0:4]), int(fdate[4:6]), int(fdate[6:8]), int(fdate[9:11]), int(fdate[11:13]),
-                           int(fdate[13:15]))
-    elif len(files) > 1: # If more than one file
-        fdate = files[len(files) - 1].split("_")[0]
-        end_dateval = datetime(int(fdate[0:4]), int(fdate[4:6]), int(fdate[6:8]), int(fdate[9:11]),
-                               int(fdate[11:13]),
                                int(fdate[13:15]))
 
-    else:
-        end_dateval = dateval
     print("Date range {} to {}".format(dateval, end_dateval))
 
     # Create catalog sub_folder - delete if exists
@@ -278,16 +271,16 @@ def main(args: Namespace = None) -> int:
     else:
         netcdf = ""
     if args.stac or args.collection:
-        cat_folder = os.path.join(ofolder, "{}-stac{}-v{}".format(catalog_id, netcdf, version))
+        cat_folder = os.path.join(outdir, "{}-stac{}-v{}".format(catalog_id, netcdf, version))
     else:
-        cat_folder = os.path.join(ofolder, "{}-records{}-v{}".format(catalog_id, netcdf, version))
+        cat_folder = os.path.join(outdir, "{}-records{}-v{}".format(catalog_id, netcdf, version))
 
     if os.path.exists(cat_folder):
         shutil.rmtree(cat_folder)
     os.mkdir(cat_folder)
 
     # Get image and then extract information from first object
-    img_path = pull_s3bucket(logger, tmp_dir, urlpath+files[0], catalog_id, catalog_desc)
+    img_path = pull_s3bucket(logger, tmp_dir, urlpath + files[0], catalog_id, catalog_desc)
     bbox, footprint, src_crs, dst_crs = get_bbox_and_footprint(logger, img_path)
     logger.debug("Footprint: {}".format(footprint))
 
@@ -301,25 +294,27 @@ def main(args: Namespace = None) -> int:
 
         # Create catalog
         if args.collection:
-            catalog = pystac.Collection(id=catalog_id, title=catalog_title, description=catalog_desc, extent=collection_extent)
+            catalog = pystac.Collection(id=catalog_id, title=catalog_title, description=catalog_desc,
+                                        extent=collection_extent)
 
             # Setup provider information
             catalog.providers = [
-                pystac.Provider(name='Pixalytics Ltd', roles=['producer'], url='https://www.pixalytics.com/')]
+                pystac.Provider(name=provider_name, roles=[pystac.ProviderRole.PRODUCER], url=provider_url)]
 
         else:
             catalog = pystac.Catalog(id=catalog_id, title=catalog_title, description=catalog_desc)
 
-        for file in files:
+        for count, file in enumerate(files):
             item = add_item(footprint, bbox, src_crs.split(":")[1], gsd, url, file)
+            if count == 0:
+                # JSON dump item
+                logger.debug(json.dumps(item.to_dict(), indent=4))
+
             catalog.add_item(item)
 
         # Update extents in catalog from items
         if args.collection:
             catalog.update_extent_from_items()
-
-        # JSON dump item
-        logger.debug(json.dumps(item.to_dict(), indent=4))
 
         # Set HREFs
         catalog.normalize_hrefs(cat_folder)
@@ -334,8 +329,8 @@ def main(args: Namespace = None) -> int:
         with open(catalog.get_self_href()) as f:
             print(f.read())
 
-    else: # OGC Records
-        logger.info("Creating Records Catalog")
+    else:  # OGC Records
+        logger.info("Creating OGC Records Catalog")
 
         # Create catalog information
         catalog_dict = {}
@@ -344,16 +339,16 @@ def main(args: Namespace = None) -> int:
         catalog_dict.update({'cat_begin': dateval.strftime("%Y-%m-%d")})
         catalog_dict.update({'cat_end': end_dateval.strftime("%Y-%m-%d")})
 
-        # Loop for each file to create a record for
-        count = 0
+        # Loop for each file to create an OGC record for each
         link_dict = {}
-        for file in files:
+        for count, file in enumerate(files):
 
             # For each file, update generic record yaml
-            out_yaml = os.path.join(os.path.dirname(__file__), os.path.splitext(os.path.basename(yaml_file))[0] + "-updated.yml")
+            out_yaml = os.path.join(os.path.dirname(__file__),
+                                    os.path.splitext(os.path.basename(yaml_file))[0] + "-updated.yml")
 
             # Read YML contents
-            with open(os.path.join(os.path.dirname(__file__),yaml_file)) as f:
+            with open(os.path.join(os.path.dirname(__file__), yaml_file)) as f:
                 # use safe_load instead load
                 dataMap = yaml.safe_load(f)
                 f.close()
@@ -361,11 +356,11 @@ def main(args: Namespace = None) -> int:
             # Update bounding box
             logger.info("dataMap: {} ".format(dataMap['identification']['extents']['spatial']))
             yaml_dict = {}
-            fbbox = '[{:.3f},{:.3f},{:.3f},{:.3f}]'.format(bbox[0],bbox[1],bbox[2],bbox[3])
-            yaml_dict.update({'bbox': ast.literal_eval(fbbox)})
+            float_bbox = '[{:.3f},{:.3f},{:.3f},{:.3f}]'.format(bbox[0], bbox[1], bbox[2], bbox[3])
+            yaml_dict.update({'bbox': ast.literal_eval(float_bbox)})
             yaml_dict.update({'crs': ast.literal_eval(dst_crs.split(":")[1])})
             # remove single quotes
-            res = {key.replace("'", ""):val for key, val in yaml_dict.items()}
+            res = {key.replace("'", ""): val for key, val in yaml_dict.items()}
             dataMap['identification']['extents']['spatial'] = [res]
             logger.info("Modified dataMap: {} ".format(dataMap['identification']['extents']['spatial']))
 
@@ -374,48 +369,45 @@ def main(args: Namespace = None) -> int:
             fdate = file.split("_")[0]
             dateval = datetime(int(fdate[0:4]), int(fdate[4:6]), int(fdate[6:8]), int(fdate[9:11]), int(fdate[11:13]),
                                int(fdate[13:15]))
-            datestr = dateval.strftime("%Y-%m-%d")
+            date_string = dateval.strftime("%Y-%m-%d")
             if args.netcdfsingle:
-                end_datestr = end_dateval.strftime("%Y-%m-%d")
+                end_date_string = end_dateval.strftime("%Y-%m-%d")
             else:
-                end_datestr = datestr
+                end_date_string = date_string
 
             yaml_dict = {}
-            yaml_dict.update({'begin': datestr})
-            yaml_dict.update({'end': end_datestr})
+            yaml_dict.update({'begin': date_string})
+            yaml_dict.update({'end': end_date_string})
             dataMap['identification']['extents']['temporal'] = [yaml_dict]
             logger.debug("Modified dataMap: {} ".format(dataMap['identification']['extents']['temporal']))
 
             # Update filename
             logger.debug("dataMap: {} ".format(dataMap['metadata']['dataseturi']))
-            dataMap['metadata']['dataseturi'] = url+file
+            dataMap['metadata']['dataseturi'] = url + file
             logger.debug("Modified dataMap: {} ".format(dataMap['metadata']['dataseturi']))
 
             # Updated url and file type
-            dataMap['distribution']['s3']['url'] = url+file
+            dataMap['distribution']['s3']['url'] = url + file
             if os.path.splitext(file) == "tif":
                 dataMap['distribution']['s3']['type'] = 'GeoTIFF'
             else:
                 dataMap['distribution']['s3']['type'] = 'NetCDF'
-            logger.debug("Modified dataMap: {} {} ".format(dataMap['distribution']['s3']['type'], dataMap['distribution']['s3']['url']))
+            logger.debug("Modified dataMap type: {} ".format(dataMap['distribution']['s3']['type']))
+            logger.debug("Modified dataMap url: {} ".format(dataMap['distribution']['s3']['url']))
 
             # Remove single quotes
             dataDict = {re.sub("'", "", key): val for key, val in dataMap.items()}
 
-            #for key, val in dataMap.items():
-            #    print(key,val)
-            #sys.exit(1)
-
-            # Output modified version
+            # Output modified version of YAML
             with open(out_yaml, 'w') as f:
                 yaml.dump(dataDict, f)
                 f.close()
 
-            # Read YML from disk
+            # Read modified YAML into dictionary
             mcf_dict = read_mcf(out_yaml)
 
             # JSON dataset files
-            dataset = "{}{}".format(os.path.basename(yaml_file).split(".")[0],count+1)
+            dataset = "{}{}".format(os.path.basename(yaml_file).split(".")[0], count + 1)
             json_file = os.path.join(cat_folder, dataset + ".json")
             link_dict.update({dataset: "./" + os.path.basename(json_file)})
 
@@ -424,36 +416,33 @@ def main(args: Namespace = None) -> int:
 
             # Default schema
             json_string = records_os.write(mcf_dict)
-            print(json_string)
 
             # Write to disk
             with open(json_file, 'w') as ff:
                 ff.write(json_string)
                 ff.close()
 
-            # Increment for each file
-            count += 1
+            # Last loop
+            if files[-1] == files[count]:
 
-        # Add record links
-        if count == 1:
-            catalog_dict.update({'cat_file': "./" + os.path.basename(json_file)})
-        else:
-            catalog_dict.update({'cat_file': link_dict})
-        mcf_dict.update(catalog_dict)
+                # Add record links
+                catalog_dict.update({'cat_file': link_dict})
+                mcf_dict.update(catalog_dict)
 
-        # Choose API Dataset Record as catalog
-        # https://github.com/cholmes/ogc-collection/blob/main/ogc-dataset-record-spec.md - see examples
-        records_os = OGCAPIDRecordOutputSchema()
+                # Choose API Dataset Record as catalog
+                # https://github.com/cholmes/ogc-collection/blob/main/ogc-dataset-record-spec.md - see examples
+                records_os = OGCAPIDRecordOutputSchema()
 
-        # Default catalog schema
-        json_string = records_os.write(mcf_dict)
-        print(json_string)
+                # Default catalog schema
+                #print(mcf_dict)
+                json_string = records_os.write(mcf_dict)
+                logging.debug(json_string)
 
-        # Write catalog to disk
-        cat_file = os.path.join(cat_folder, "catalog.json")
-        with open(cat_file, 'w') as ff:
-            ff.write(json_string)
-            ff.close()
+                # Write catalog to disk
+                cat_file = os.path.join(cat_folder, "catalog.json")
+                with open(cat_file, 'w') as ff:
+                    ff.write(json_string)
+                    ff.close()
 
     # Clean up
     tmp_dir.cleanup()
