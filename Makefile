@@ -36,7 +36,6 @@ pull_aws:
 	docker pull $(AWS_REPO)/$(DOCKER_IMAGE)
 pull_docker:
 	docker pull $(DOCKER_REPO)/$(DOCKER_IMAGE)
-<<<<<<< HEAD
 
 ## Running container for catalog deployment api server
 # 8080 HTTP interface 8443 HTTPS interface
@@ -52,8 +51,6 @@ run_docker_background_user:
 # EDR server
 run_docker_background_edr:
 	docker run -d --expose 8443 -p 8443:443/tcp -p 8080:8080/tcp -v ~/.aws/credentials:/root/.aws/credentials:ro -v ~/ogcapi_testbed17_dataset_d168/deploy_catalog/backend_configuration.json:/usr/src/app/backend_configuration_edr.json $(DOCKER_REPO)/$(DOCKER_IMAGE_EDR)
-=======
->>>>>>> e9c6309cf42ea5760c88ce65186e52d5c8535409
 
 ## Running container for catalog deployment api server
 # 8080 HTTP interface 8443 HTTPS interface
