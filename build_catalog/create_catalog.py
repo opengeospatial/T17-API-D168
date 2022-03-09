@@ -258,8 +258,7 @@ def main():
             fdate = fdate.split("-")[1]
         elif len(files) > 1:  # If more than one file
             fdate = files[len(files) - 1].split("_")[0]
-        end_dateval = datetime(int(fdate[0:4]), int(fdate[4:6]), int(fdate[6:8]), int(fdate[9:11]), int(fdate[11:13]),
-                               int(fdate[13:15]))
+        end_dateval = datetime(int(fdate[0:4]), int(fdate[4:6]), int(fdate[6:8]), int(fdate[9:11]), int(fdate[11:13]), int(fdate[13:15]))
 
     print("Date range {} to {}".format(dateval, end_dateval))
 
@@ -336,8 +335,10 @@ def main():
         catalog_dict = {}
         catalog_dict.update({'cat_id': catalog_id})
         catalog_dict.update({'cat_description': catalog_desc})
-        catalog_dict.update({'cat_begin': dateval.strftime("%Y-%m-%d")})
-        catalog_dict.update({'cat_end': end_dateval.strftime("%Y-%m-%d")})
+        cat_begin = dateval.strftime("%Y-%m-%d")
+        cat_end = end_dateval.strftime("%Y-%m-%d")
+        catalog_dict.update({'cat_begin': cat_begin})
+        catalog_dict.update({'cat_end': cat_end})
 
         # Loop for each file to create an OGC record for each
         link_dict = {}
@@ -429,9 +430,23 @@ def main():
                 catalog_dict.update({'cat_file': link_dict})
                 mcf_dict.update(catalog_dict)
 
+                # Catalog adjustments
+                mcf_dict['metadata']['identifier'] = catalog_id
+                now_dateval = datetime.utcnow().strftime("%Y-%m-%d")
+
+                #mcf_dict['identification']['dates']['creation'] = now_dateval
+                #mcf_dict['identification']['dates']['revision'] = now_dateval
+                mcf_dict['identification']['extents']['temporal'][0]['begin'] = cat_begin
+                mcf_dict['identification']['extents']['temporal'][0]['end'] = cat_end
+                cat_link_dict = {}
+                cat_link_dict.update({'function': 'root'})
+                cat_link_dict.update({'type': 'application/json'})
+                #cat_link_dict.update({'url': 'link_dict})
+                #mcf_dict['distribution'] = cat_link_dict
+
                 # Choose API Dataset Record as catalog
                 # https://github.com/cholmes/ogc-collection/blob/main/ogc-dataset-record-spec.md - see examples
-                records_os = OGCAPIDRecordOutputSchema()
+                records_os = OGCAPIRecordOutputSchema()
 
                 # Default catalog schema
                 #print(mcf_dict)
