@@ -1,0 +1,62 @@
+mcf:
+    version: 1.0
+
+metadata:
+    identifier: pix-lcc-eo4sas-test
+    language: en
+    language_alternate: none
+    charset: utf8
+    parentidentifier: parentid
+    hierarchylevel: catalog
+
+identification:
+    language: en
+    charset: utf8
+    title: title
+    abstract: abstract
+    keywords:
+        default:
+            keywords_en: [eo4sas,classification]
+            keywords_type: theme
+    topiccategory:
+        - LandUse
+    dates:
+        publication: 2021-05-11T00:00:00Z
+    fees: None
+    accessconstraints: None
+    rights_fr: Copyright (c) 2021 Pixalytics
+    url: http://xxx
+    extents:
+        spatial:
+            - bbox: [300000.0,9792040.0,408000.0,9850000.0]
+              crs: 32737
+        temporal:
+            - begin: 2020-08-31
+              end: 2020-08-31
+    status: finished
+    maintenancefrequency: infrequent
+
+contact:
+    main: &contact_main
+        organization: Pixalytics Ltd
+        url: https://www.pixalytics.com/
+        individualname: Dr Samantha Lavender
+        positionname: Managing Director
+        phone: +44-1752-764407
+        fax: none
+        address: Plymouth Science Park
+        city: Plymouth
+        administrativearea: Devon
+        postalcode: PL6 8BX
+        country: United Kingom
+        email: helpdesk@pixalytics.com
+        hoursofservice: 0900h - 1700h GMT
+        contactinstructions: email
+
+    distribution: *contact_main
+
+distribution:
+    s3:
+        url: https
+        type: application/json
+        function: item

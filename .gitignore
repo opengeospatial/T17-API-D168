@@ -152,3 +152,4 @@ build_catalog/eo4sas-record-updated.yml
 environment-all.yml
 Makefile
 schemas
+build_catalog/eo4sas-catalog-updated.yml

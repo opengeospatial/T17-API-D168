@@ -345,8 +345,7 @@ def main():
         for count, file in enumerate(files):
 
             # For each file, update generic record yaml
-            out_yaml = os.path.join(os.path.dirname(__file__),
-                                    os.path.splitext(os.path.basename(yaml_file))[0] + "-updated.yml")
+            out_yaml = os.path.join(os.path.dirname(__file__), os.path.splitext(os.path.basename(yaml_file))[0] + "-updated.yml")
 
             # Read YML contents
             with open(os.path.join(os.path.dirname(__file__), yaml_file)) as f:
@@ -409,8 +408,11 @@ def main():
 
             # JSON dataset files
             dataset = "{}{}".format(os.path.basename(yaml_file).split(".")[0], count + 1)
-            json_file = os.path.join(cat_folder, dataset + ".json")
-            link_dict.update({dataset: "./" + os.path.basename(json_file)})
+            # create dataset folder
+            dset_folder = os.path.join(cat_folder, dataset)
+            os.mkdir(dset_folder)
+            json_file = os.path.join(dset_folder, dataset + ".json")
+            link_dict.update({dataset: "{}/".format(dataset) + os.path.basename(json_file)})
 
             # Choose API Records output schema
             records_os = OGCAPIRecordOutputSchema()
@@ -426,24 +428,51 @@ def main():
             # Last loop
             if files[-1] == files[count]:
 
+                # For the catalog, update generic record yaml
+                cat_yaml = yaml_file.replace("record","catalog")
+                out_yaml = os.path.join(os.path.dirname(__file__), os.path.splitext(os.path.basename(cat_yaml))[0] + "-updated.yml")
+
+                # Read original YML contents
+                print(out_yaml)
+                with open(os.path.join(os.path.dirname(__file__), cat_yaml)) as f:
+                    # use safe_load instead of load
+                    dataMap = yaml.safe_load(f)
+                    f.close()
+
+                # Update details
+                dataMap['identification']['extents']['spatial'] = [res]
+                yaml_dict = {}
+                yaml_dict.update({'begin': date_string})
+                yaml_dict.update({'end': end_date_string})
+                dataMap['identification']['extents']['temporal'] = [yaml_dict]
+
+                # Remove single quotes
+                dataDict = {re.sub("'", "", key): val for key, val in dataMap.items()}
+
+                # Output modified version of YAML
+                with open(out_yaml, 'w') as f:
+                    yaml.dump(dataDict, f)
+                    f.close()
+
+                # Read modified YAML into dictionary
+                mcf_dict = read_mcf(out_yaml)
+
                 # Add record links
                 catalog_dict.update({'cat_file': link_dict})
                 mcf_dict.update(catalog_dict)
 
                 # Catalog adjustments
                 mcf_dict['metadata']['identifier'] = catalog_id
+                mcf_dict['identification']['title'] = catalog_title
+                mcf_dict['identification']['name'] = 'sam'
+                mcf_dict['identification']['abstract'] = catalog_desc
+
                 now_dateval = datetime.utcnow().strftime("%Y-%m-%d")
 
-                #mcf_dict['identification']['dates']['creation'] = now_dateval
-                #mcf_dict['identification']['dates']['revision'] = now_dateval
-                mcf_dict['identification']['extents']['temporal'][0]['begin'] = cat_begin
-                mcf_dict['identification']['extents']['temporal'][0]['end'] = cat_end
-                cat_link_dict = {}
-                cat_link_dict.update({'function': 'root'})
-                cat_link_dict.update({'type': 'application/json'})
-                #cat_link_dict.update({'url': 'link_dict})
-                #mcf_dict['distribution'] = cat_link_dict
-
+                mcf_dict['identification']['dates']['creation'] = now_dateval
+                mcf_dict['identification']['dates']['revision'] = now_dateval
+                mcf_dict['distribution']['s3']['url'] = link_dict
+                print("Links: ",mcf_dict)
                 # Choose API Dataset Record as catalog
                 # https://github.com/cholmes/ogc-collection/blob/main/ogc-dataset-record-spec.md - see examples
                 records_os = OGCAPIRecordOutputSchema()
