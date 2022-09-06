@@ -1,0 +1,27 @@
+# Catalog Id
+catalog_id: "tds-catalog"
+
+# Catalog description
+catalog_title: "Testbed-18 TDS Catalog"
+
+# Catalog description
+catalog_desc: "Small test data set to test for Tested 18."
+
+#  Location of inputs files as url
+url: "https://pixalytics-ogc-api.s3.eu-west-2.amazonaws.com/TDS/inputs/"
+
+#  Files to include in catalog
+files: "20191115T102219_rgb_classification.tif,20191220T101537_rgb_classification.tif,20200831T101156_rgb_classification.tif,20201119T104910_rgb_classification.tif,20201214T101151_rgb_classification.tif"
+
+# Spatial resolution
+gsd: "10.0"
+
+#  Output directory
+output_dir: "./ogcapi/TDS-CATALOG"
+
+# YAML for API Records
+yaml_file: "./tds-record.yml"
+
+# Provider details
+provider_name: "Pixalytics Ltd"
+provider_url: "https://www.pixalytics.com/"

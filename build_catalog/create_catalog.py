@@ -150,6 +150,13 @@ def main():
         default=False,
     )
     parser.add_argument(
+        "-T",
+        "--tds",
+        help="Create Test Data Set catalog",
+        action="store_true",
+        default=False,
+    )
+    parser.add_argument(
         "-c",
         "--collection",
         help="Create STAC collection",
@@ -189,6 +196,8 @@ def main():
     # Configuration to be loaded from main directory
     if args.test:
         CONFIGURATION_FILE_PATH = os.path.join(code_dir, "test-configuration.yaml")
+    elif args.tds:
+        CONFIGURATION_FILE_PATH = os.path.join(code_dir, "tds-configuration.yaml")
     elif args.netcdf:
         CONFIGURATION_FILE_PATH = os.path.join(code_dir, "configuration-nc.yaml")
     elif args.netcdfsingle:
@@ -262,13 +271,14 @@ def main():
 
     print("Date range {} to {}".format(dateval, end_dateval))
 
-    # Create catalog sub_folder - delete if exists
+    # Include netcdf in sub_folder name
     if args.netcdf:
         netcdf = "-nc"
     elif args.netcdfsingle:
         netcdf = "-nc-single"
     else:
         netcdf = ""
+    # Create catalog sub_folder - delete if exists
     if args.stac or args.collection:
         cat_folder = os.path.join(outdir, "{}-stac{}-v{}".format(catalog_id, netcdf, version))
     else:
