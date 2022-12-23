@@ -145,6 +145,7 @@ ogcapi
 # Links to folders/files
 pygeometa
 elasticsearch_loader
+pytdml
 
 # Local configuration files
 deploy_catalog/es_upload_conf.yaml
