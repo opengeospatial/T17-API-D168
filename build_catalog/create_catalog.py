@@ -5,6 +5,7 @@ import sys
 import pystac
 from pystac.extensions.projection import ProjectionExtension
 import os
+import subprocess
 from argparse import ArgumentParser
 from urllib.request import urlretrieve
 from urllib.error import URLError
@@ -24,6 +25,9 @@ from pygeometa.schemas.ogc_t18dml import OGCT18DMLOutputSchema
 
 import yaml
 import logging
+
+env_path = r"/home/seadas/anaconda3/envs/ogcapi"
+python = "{}/bin/python3".format(env_path)
 
 
 # Need to transform to EPSG4326 as other projections not allowed by GeoJSON format
@@ -122,7 +126,12 @@ def add_item(logger, footprint, bbox, epsg, gsd, img_path, image_id):
 
 
 def write_pytdml(logger,pytdml_yaml, pytdml_json):
-    cmd = "pytdml/yaml_to_tdml.py --config={} --output={}".format(pytdml_yaml, pytdml_json)
+    cmd = "{} pytdml/yaml_to_tdml.py --config={} --output={}".format(python, pytdml_yaml, pytdml_json)
+
+    env = os.environ.copy()
+    env['LD_LIBRARY_PATH'] = "{}/lib".format(env_path)
+    proc = subprocess.Popen(cmd, shell=True, env=env)
+    proc.wait()
 
 
 def main():
@@ -299,7 +308,7 @@ def main():
         cat_folder = os.path.join(outdir, "{}-stac{}-v{}".format(catalog_id, netcdf, version))
     elif args.tds:
         cat_folder = os.path.join(outdir, "{}-tds{}-v{}".format(catalog_id, netcdf, version))
-        pytdml_folder = os.path.join(outdir, "{}-tds-pytdml-v{}".format(catalog_id, version))
+        pytdml_folder = os.path.join(outdir, "{}-pytdml-v{}".format(catalog_id, version))
     else:
         cat_folder = os.path.join(outdir, "{}-records{}-v{}".format(catalog_id, netcdf, version))
 
@@ -385,8 +394,14 @@ def main():
             print(f.read())
 
         # Also create pytdml catalog
+        if not os.path.exists(pytdml_folder):
+            os.mkdir(pytdml_folder)
         pytdml_json = os.path.join(pytdml_folder, "{}.gson".format(catalog_id))
-        write_pytdml(logger, CONFIGURATION_PYTDML, pytdml_json)
+        try:
+            write_pytdml(logger, CONFIGURATION_PYTDML, pytdml_json)
+            logger.info("Wrote pytdml file: {}".format(pytdml_json))
+        except:
+            logger.warning("Failed to write pytdml file")
 
     else:  # OGC Records
         logger.info("Creating OGC Records Catalog")
