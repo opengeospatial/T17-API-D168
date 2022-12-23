@@ -78,10 +78,14 @@ def pull_s3bucket(logger, tmp_dir, url, catalog_id, catalog_desc):
     return img_path
 
 
-def add_item(footprint, bbox, epsg, gsd, img_path, image_id):
-    fdate = image_id.split("_")[0]
-    dateval = datetime(int(fdate[0:4]), int(fdate[4:6]), int(fdate[6:8]), int(fdate[9:11]), int(fdate[11:13]),
-                       int(fdate[13:15]))
+def add_item(logger, footprint, bbox, epsg, gsd, img_path, image_id):
+    try:
+        fdate = image_id.split("_")[0]
+        dateval = datetime(int(fdate[0:4]), int(fdate[4:6]), int(fdate[6:8]), int(fdate[9:11]), int(fdate[11:13]),
+                           int(fdate[13:15]))
+    except:
+        dateval = datetime.utcnow()
+        logger.warning("Failed to extract date from {}, using today's date".format(image_id, dateval))
 
     # Add item to catalog and apply timestamp
     item = pystac.Item(id=image_id.split(".")[0],
@@ -115,6 +119,10 @@ def add_item(footprint, bbox, epsg, gsd, img_path, image_id):
     item.validate()
 
     return item
+
+
+def write_pytdml(logger,pytdml_yaml, pytdml_json):
+    cmd = "pytdml/yaml_to_tdml.py --config={} --output={}".format(pytdml_yaml, pytdml_json)
 
 
 def main():
@@ -196,9 +204,10 @@ def main():
 
     # Configuration to be loaded from main directory
     if args.test:
-        CONFIGURATION_FILE_PATH = os.path.join(code_dir, "test-configuration.yaml")
+        CONFIGURATION_FILE_PATH = os.path.join(code_dir, "configuration-test.yaml")
     elif args.tds:
-        CONFIGURATION_FILE_PATH = os.path.join(code_dir, "tds-configuration.yaml")
+        CONFIGURATION_FILE_PATH = os.path.join(code_dir, "configuration-tds.yaml")
+        CONFIGURATION_PYTDML = os.path.join(code_dir, "configuration-tds-pytdml.yaml")
     elif args.netcdf:
         CONFIGURATION_FILE_PATH = os.path.join(code_dir, "configuration-nc.yaml")
     elif args.netcdfsingle:
@@ -215,6 +224,12 @@ def main():
             url = config["url"]
             temp = config["files"]
             files = temp.split(",")
+
+            # Additional files for a TDS dataset
+            if "tds" in CONFIGURATION_FILE_PATH:
+                temp = config["label_files"]
+                label_files = temp.split(",")
+
             out_default = config["output_dir"]
             gsd = config["gsd"]
             yaml_file = config["yaml_file"]
@@ -256,7 +271,7 @@ def main():
 
     # Date range
     # Add item to catalog
-    if args.test:
+    if args.test or args.tds:
         dateval = datetime.utcnow()
         end_dateval = dateval
     else:
@@ -284,6 +299,7 @@ def main():
         cat_folder = os.path.join(outdir, "{}-stac{}-v{}".format(catalog_id, netcdf, version))
     elif args.tds:
         cat_folder = os.path.join(outdir, "{}-tds{}-v{}".format(catalog_id, netcdf, version))
+        pytdml_folder = os.path.join(outdir, "{}-tds-pytdml-v{}".format(catalog_id, version))
     else:
         cat_folder = os.path.join(outdir, "{}-records{}-v{}".format(catalog_id, netcdf, version))
 
@@ -317,12 +333,12 @@ def main():
             catalog = pystac.Catalog(id=catalog_id, title=catalog_title, description=catalog_desc)
 
         for count, file in enumerate(files):
-            item = add_item(footprint, bbox, src_crs.split(":")[1], gsd, url, file)
+            item = add_item(logger, footprint, bbox, src_crs.split(":")[1], gsd, url, file)
+            catalog.add_item(item)
+
             if count == 0:
                 # JSON dump item
                 logger.debug(json.dumps(item.to_dict(), indent=4))
-
-            catalog.add_item(item)
 
         # Update extents in catalog from items
         if args.collection:
@@ -345,12 +361,15 @@ def main():
         catalog = pystac.Catalog(id=catalog_id, title=catalog_title, description=catalog_desc)
 
         for count, file in enumerate(files):
-            item = add_item(footprint, bbox, src_crs.split(":")[1], gsd, url, file)
+            item = add_item(logger, footprint, bbox, src_crs.split(":")[1], gsd, url, file)
+            catalog.add_item(item)
             if count == 0:
                 # JSON dump item
                 logger.debug(json.dumps(item.to_dict(), indent=4))
 
-            catalog.add_item(item)
+            logger.info("Adding label file")
+            item = add_item(logger, footprint, bbox, src_crs.split(":")[1], gsd, url, label_files[count])
+        catalog.add_item(item)
 
         # Set HREFs
         catalog.normalize_hrefs(cat_folder)
@@ -364,6 +383,10 @@ def main():
         # Show catalog
         with open(catalog.get_self_href()) as f:
             print(f.read())
+
+        # Also create pytdml catalog
+        pytdml_json = os.path.join(pytdml_folder, "{}.gson".format(catalog_id))
+        write_pytdml(logger, CONFIGURATION_PYTDML, pytdml_json)
 
     else:  # OGC Records
         logger.info("Creating OGC Records Catalog")
