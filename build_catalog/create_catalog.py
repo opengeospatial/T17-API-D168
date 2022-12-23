@@ -18,8 +18,9 @@ import ast
 import re
 # Pixalytics version of repository, from https://github.com/geopython/pygeometa
 from pygeometa.core import read_mcf
-from pygeometa.schemas.ogc_api_dataset_record import OGCAPIDRecordOutputSchema
-from pygeometa.schemas.ogc_api_records import OGCAPIRecordOutputSchema
+from pygeometa.schemas.ogcapi_dataset_records import OGCAPIDRecordOutputSchema
+from pygeometa.schemas.ogcapi_records import OGCAPIRecordOutputSchema
+from pygeometa.schemas.ogc_t18dml import OGCT18DMLOutputSchema
 
 import yaml
 import logging
@@ -281,6 +282,8 @@ def main():
     # Create catalog sub_folder - delete if exists
     if args.stac or args.collection:
         cat_folder = os.path.join(outdir, "{}-stac{}-v{}".format(catalog_id, netcdf, version))
+    elif args.tds:
+        cat_folder = os.path.join(outdir, "{}-tds{}-v{}".format(catalog_id, netcdf, version))
     else:
         cat_folder = os.path.join(outdir, "{}-records{}-v{}".format(catalog_id, netcdf, version))
 
@@ -324,6 +327,30 @@ def main():
         # Update extents in catalog from items
         if args.collection:
             catalog.update_extent_from_items()
+
+        # Set HREFs
+        catalog.normalize_hrefs(cat_folder)
+
+        # Validate, which needs: pip install pystac[validation]
+        catalog.validate_all()
+
+        # Save catalog
+        catalog.save(catalog_type=pystac.CatalogType.SELF_CONTAINED)
+
+        # Show catalog
+        with open(catalog.get_self_href()) as f:
+            print(f.read())
+
+    elif args.tds: # Create T18 TDS catalog
+        catalog = pystac.Catalog(id=catalog_id, title=catalog_title, description=catalog_desc)
+
+        for count, file in enumerate(files):
+            item = add_item(footprint, bbox, src_crs.split(":")[1], gsd, url, file)
+            if count == 0:
+                # JSON dump item
+                logger.debug(json.dumps(item.to_dict(), indent=4))
+
+            catalog.add_item(item)
 
         # Set HREFs
         catalog.normalize_hrefs(cat_folder)
@@ -497,6 +524,7 @@ def main():
                 with open(cat_file, 'w') as ff:
                     ff.write(json_string)
                     ff.close()
+
 
     # Clean up
     tmp_dir.cleanup()
