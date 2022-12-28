@@ -10,15 +10,35 @@ providers:
   - Pixalytics Ltd
 keywords:
   - Land Cover Classification
-classes:
-  - Land Cover
-tasks:
-  - description: xxx
-    task_type: xxx
 data_sources:
-  - id: image_id
-    data_type: Optical Image
-    format: tif
+  - id: sentinel2
+    data_type: Optical
+    platform: Sentinel-2
+    resolution: 10m
+classes:
+  - clear water: 1
+  - algal blooms: 2
+  - aqueous deposits: 3
+  - bare ground: 4
+  - murrum soil: 5
+  - sand: 6
+  - grassland: 7
+  - shrubland: 8
+  - forest: 9
+  - cropland: 10
+  - palm: 11
+  - buildings: 12
+  - artificial surfaces: 13
+  - cloud: 14
+  - shadows: 15
+  - plastic: 16
+  - tyres: 17
+  - waves: 18
+  - greenhouses: 19
+  - waste sites: 20
+tasks:
+  - description: Classification of waste plastics
+    task_type: Semantic Segmentation
 bands:
   - red
   - green
@@ -30,8 +50,8 @@ data:
   label_type: PixelLabel
   data_path:
     - type: image
-      format: stac
+      format: .tif
       root_path: /home/seadas/shared/ogcapi/input-TDS/rgb
     - type: label
       format: stac
-      root_path: /home/seadas/shared/ogcapi/input-TDS/label
+      root_path: /home/seadas/shared/ogcapi/CATALOG/tds-catalog-tds-v0-9/tile49_label

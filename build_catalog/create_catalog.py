@@ -26,6 +26,7 @@ from pygeometa.schemas.ogc_t18dml import OGCT18DMLOutputSchema
 import yaml
 import logging
 
+TF_CPP_MIN_LOG_LEVEL="2"
 env_path = r"/home/seadas/anaconda3/envs/ogcapi"
 python = "{}/bin/python3".format(env_path)
 
