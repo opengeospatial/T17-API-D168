@@ -22,7 +22,7 @@ from pygeometa.core import read_mcf
 from pygeometa.schemas.ogcapi_dataset_records import OGCAPIDRecordOutputSchema
 from pygeometa.schemas.ogcapi_records import OGCAPIRecordOutputSchema
 from pygeometa.schemas.ogc_t18dml import OGCT18DMLOutputSchema
-
+import pytdml
 import yaml
 import logging
 
@@ -403,6 +403,12 @@ def main():
             logger.info("Wrote pytdml file: {}".format(pytdml_json))
         except:
             logger.warning("Failed to write pytdml file")
+
+        # Check if pytdml worked - read from TDML json file
+        training_dataset = pytdml.io.read_from_json(pytdml_json)
+        print("Checking training dataset: {}".format(training_dataset.name))
+        print("Number of training samples: {}".format(str(training_dataset.amount_of_training_data)))
+        print("Number of classes: {}".format(str(training_dataset.number_of_classes)))
 
     else:  # OGC Records
         logger.info("Creating OGC Records Catalog")
