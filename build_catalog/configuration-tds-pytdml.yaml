@@ -53,5 +53,5 @@ data:
       format: .tif
       root_path: /home/seadas/shared/ogcapi/input-TDS/rgb
     - type: label
-      format: stac
+      format: .json # Needed for stac file to be picked up
       root_path: /home/seadas/shared/ogcapi/CATALOG/tds-catalog-tds-v0-9/tile49_label

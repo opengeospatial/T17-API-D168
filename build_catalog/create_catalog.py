@@ -22,7 +22,10 @@ from pygeometa.core import read_mcf
 from pygeometa.schemas.ogcapi_dataset_records import OGCAPIDRecordOutputSchema
 from pygeometa.schemas.ogcapi_records import OGCAPIRecordOutputSchema
 from pygeometa.schemas.ogc_t18dml import OGCT18DMLOutputSchema
+# TrainingDL-AI ML TDS format
 import pytdml
+from pytdml.io import write_to_json
+from pytdml import yaml_to_tdml
 import yaml
 import logging
 
@@ -126,13 +129,22 @@ def add_item(logger, footprint, bbox, epsg, gsd, img_path, image_id):
     return item
 
 
-def write_pytdml(logger,pytdml_yaml, pytdml_json):
+def write_pytdml(logger, pytdml_yaml, pytdml_json):
     cmd = "{} pytdml/yaml_to_tdml.py --config={} --output={}".format(python, pytdml_yaml, pytdml_json)
 
-    env = os.environ.copy()
-    env['LD_LIBRARY_PATH'] = "{}/lib".format(env_path)
-    proc = subprocess.Popen(cmd, shell=True, env=env)
-    proc.wait()
+    os.environ['LD_LIBRARY_PATH'] = "{}/lib".format(env_path)
+
+    # Run as executable
+    #proc = subprocess.Popen(cmd, shell=True, env=env)
+    #proc.wait()
+
+    # Run as Python code
+    os.environ["TF_CPP_MIN_LOG_LEVEL"] = str(2)
+    eo_training_dataset = yaml_to_tdml.yaml_to_eo_tdml(pytdml_yaml)
+    if eo_training_dataset:
+        write_to_json(eo_training_dataset, pytdml_json)
+    else:
+        logger.error("Failed to generate eo_training_dataset")
 
 
 def main():
@@ -398,11 +410,11 @@ def main():
         if not os.path.exists(pytdml_folder):
             os.mkdir(pytdml_folder)
         pytdml_json = os.path.join(pytdml_folder, "{}.gson".format(catalog_id))
-        try:
-            write_pytdml(logger, CONFIGURATION_PYTDML, pytdml_json)
-            logger.info("Wrote pytdml file: {}".format(pytdml_json))
-        except:
-            logger.warning("Failed to write pytdml file")
+        #try:
+        write_pytdml(logger, CONFIGURATION_PYTDML, pytdml_json)
+        #logger.info("Wrote pytdml file: {}".format(pytdml_json))
+        #except:
+        #    logger.warning("Failed to write pytdml file")
 
         # Check if pytdml worked - read from TDML json file
         training_dataset = pytdml.io.read_from_json(pytdml_json)
