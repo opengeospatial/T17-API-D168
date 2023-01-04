@@ -29,9 +29,13 @@ from pytdml import yaml_to_tdml
 import yaml
 import logging
 
-TF_CPP_MIN_LOG_LEVEL="2"
+# Conda environment
 env_path = r"/home/seadas/anaconda3/envs/ogcapi"
 python = "{}/bin/python3".format(env_path)
+
+# Tensorflow environment variable added to environment variables: TF_CPP_MIN_LOG_LEVEL = 2
+## 0 = all messages are logged. 1= INFO logs are removed. 2 = INFO with WARNINGS is removed
+
 
 
 # Need to transform to EPSG4326 as other projections not allowed by GeoJSON format
@@ -132,14 +136,11 @@ def add_item(logger, footprint, bbox, epsg, gsd, img_path, image_id):
 def write_pytdml(logger, pytdml_yaml, pytdml_json):
     cmd = "{} pytdml/yaml_to_tdml.py --config={} --output={}".format(python, pytdml_yaml, pytdml_json)
 
-    os.environ['LD_LIBRARY_PATH'] = "{}/lib".format(env_path)
-
     # Run as executable
     #proc = subprocess.Popen(cmd, shell=True, env=env)
     #proc.wait()
 
     # Run as Python code
-    os.environ["TF_CPP_MIN_LOG_LEVEL"] = str(2)
     eo_training_dataset = yaml_to_tdml.yaml_to_eo_tdml(pytdml_yaml)
     if eo_training_dataset:
         write_to_json(eo_training_dataset, pytdml_json)
