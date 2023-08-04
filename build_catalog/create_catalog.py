@@ -17,12 +17,18 @@ from datetime import datetime
 import json
 import ast
 import re
+
 # Pixalytics version of repository, from https://github.com/geopython/pygeometa
 from pygeometa.core import read_mcf
 from pygeometa.schemas.ogcapi_dataset_records import OGCAPIDRecordOutputSchema
 from pygeometa.schemas.ogcapi_records import OGCAPIRecordOutputSchema
 from pygeometa.schemas.ogc_t18dml import OGCT18DMLOutputSchema
-# TrainingDL-AI ML TDS format
+
+from io import BytesIO
+# pip install boto3
+import boto3
+
+# TrainingDL-AI ML TDS format, tested with version 1.1.3
 import pytdml
 from pytdml.io import write_to_json
 from pytdml import yaml_to_tdml
@@ -133,17 +139,25 @@ def add_item(logger, footprint, bbox, epsg, gsd, img_path, image_id):
     return item
 
 
-def write_pytdml(logger, pytdml_yaml, pytdml_json):
-    cmd = "{} pytdml/yaml_to_tdml.py --config={} --output={}".format(python, pytdml_yaml, pytdml_json)
+def write_pytdml(logger, pytdml_yaml, pytdml_json, url = None):
 
-    # Run as executable
-    #proc = subprocess.Popen(cmd, shell=True, env=env)
-    #proc.wait()
-
-    # Run as Python code
+    # Run conversion to pytdml
     eo_training_dataset = yaml_to_tdml.yaml_to_eo_tdml(pytdml_yaml)
+
+    # Write file to S3 bucket or locally
     if eo_training_dataset:
-        write_to_json(eo_training_dataset, pytdml_json)
+        if url is not None:
+            # Initialize S3client using the stored OGC profile
+            session = boto3.Session(profile_name='ogc')
+            s3_client = session.client('s3')
+
+            # Write PyTDML json file
+            bucket,key = pytdml.io.S3_reader.parse_s3_path(pytdml_json)
+            logger.info("Writing to S3 bucket {}: {}".format(bucket,key))
+            s3_client.put_object(Body = str(eo_training_dataset), Bucket = bucket, Key = key)
+
+        else:
+            write_to_json(eo_training_dataset, pytdml_json)
     else:
         logger.error("Failed to generate eo_training_dataset")
 
@@ -178,6 +192,13 @@ def main():
         "-s",
         "--stac",
         help="Create STAC catalog",
+        action="store_true",
+        default=False,
+    )
+    parser.add_argument(
+        "-S",
+        "--s3",
+        help="Store data in S3 bucket",
         action="store_true",
         default=False,
     )
@@ -229,8 +250,12 @@ def main():
     if args.test:
         CONFIGURATION_FILE_PATH = os.path.join(code_dir, "configuration-test.yaml")
     elif args.tds:
-        CONFIGURATION_FILE_PATH = os.path.join(code_dir, "configuration-tds.yaml")
-        CONFIGURATION_PYTDML = os.path.join(code_dir, "configuration-tds-pytdml.yaml")
+        if args.s3:
+            CONFIGURATION_FILE_PATH = os.path.join(code_dir, "configuration-tds-s3.yaml")
+            CONFIGURATION_PYTDML = os.path.join(code_dir, "configuration-tds-pytdml-s3.yaml")
+        else:
+            CONFIGURATION_FILE_PATH = os.path.join(code_dir, "configuration-tds.yaml")
+            CONFIGURATION_PYTDML = os.path.join(code_dir, "configuration-tds-pytdml.yaml")
     elif args.netcdf:
         CONFIGURATION_FILE_PATH = os.path.join(code_dir, "configuration-nc.yaml")
     elif args.netcdfsingle:
@@ -253,6 +278,7 @@ def main():
                 temp = config["label_files"]
                 label_files = temp.split(",")
 
+            input_dir = config["input_dir"]
             out_default = config["output_dir"]
             gsd = config["gsd"]
             yaml_file = config["yaml_file"]
@@ -269,7 +295,7 @@ def main():
     if args.url:
         urlpath = args.url
     else:
-        urlpath = url
+        urlpath = os.path.join(url, input_dir)
 
     # Temp directory
     tmp_dir = TemporaryDirectory()
@@ -323,15 +349,17 @@ def main():
     elif args.tds:
         cat_folder = os.path.join(outdir, "{}-tds{}-v{}".format(catalog_id, netcdf, version))
         pytdml_folder = os.path.join(outdir, "{}-pytdml-v{}".format(catalog_id, version))
+        logger.info("Generating catalog at {}".format(cat_folder))
     else:
         cat_folder = os.path.join(outdir, "{}-records{}-v{}".format(catalog_id, netcdf, version))
 
-    if os.path.exists(cat_folder):
-        shutil.rmtree(cat_folder)
-    os.mkdir(cat_folder)
+    if not args.s3:
+        if os.path.exists(cat_folder):
+            shutil.rmtree(cat_folder)
+        os.mkdir(cat_folder)
 
     # Get image and then extract information from first object
-    img_path = pull_s3bucket(logger, tmp_dir, urlpath + files[0], catalog_id, catalog_desc)
+    img_path = pull_s3bucket(logger, tmp_dir, os.path.join(urlpath, files[0]), catalog_id, catalog_desc)
     bbox, footprint, src_crs, dst_crs = get_bbox_and_footprint(logger, img_path)
     logger.debug("Footprint: {}".format(footprint))
 
@@ -408,14 +436,26 @@ def main():
             print(f.read())
 
         # Also create pytdml catalog
-        if not os.path.exists(pytdml_folder):
+        if not args.s3 and not os.path.exists(pytdml_folder):
             os.mkdir(pytdml_folder)
         pytdml_json = os.path.join(pytdml_folder, "{}.gson".format(catalog_id))
-        #try:
-        write_pytdml(logger, CONFIGURATION_PYTDML, pytdml_json)
-        #logger.info("Wrote pytdml file: {}".format(pytdml_json))
-        #except:
-        #    logger.warning("Failed to write pytdml file")
+
+        if args.s3:
+            bucket = url.split(".s3")[0].split("//")[1]
+            s3_folder = os.path.join("s3://{}".format(bucket), pytdml_folder)
+            s3_json = os.path.join(s3_folder, "{}.gson".format(catalog_id))
+
+            # Write to S3 bucket
+            write_pytdml(logger, CONFIGURATION_PYTDML, s3_json, url)
+
+            # Read back to temp file
+            tmp_json = os.path.join(tmp_dir.name, 'pytdml.json')
+            urlretrieve(os.path.join(url, pytdml_json), tmp_json)
+            logger.info("Retrieved {} to JSON file {}".format(os.path.join(url, pytdml_json), tmp_json))
+
+        else:
+            write_pytdml(logger, CONFIGURATION_PYTDML, pytdml_json)
+
 
         # Check if pytdml worked - read from TDML json file
         training_dataset = pytdml.io.read_from_json(pytdml_json)
