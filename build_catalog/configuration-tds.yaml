@@ -22,6 +22,9 @@ image_id: "image_id"
 # Spatial resolution
 gsd: "10.0"
 
+# Input directory
+input_dir: "TDS/input"
+
 #  Output director.
 output_dir: "./ogcapi/CATALOG"
 

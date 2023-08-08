@@ -146,6 +146,7 @@ ogcapi
 pygeometa
 elasticsearch_loader
 pytdml
+TDS
 
 # Local configuration files
 deploy_catalog/es_upload_conf.yaml

@@ -14,7 +14,6 @@ import rasterio
 from rasterio.warp import transform_bounds
 from shapely.geometry import Polygon, mapping
 from datetime import datetime
-import json
 import ast
 import re
 
@@ -30,10 +29,28 @@ import boto3
 
 # TrainingDL-AI ML TDS format, tested with version 1.1.3
 import pytdml
-from pytdml.io import write_to_json
 from pytdml import yaml_to_tdml
+from pytdml.io import write_to_json
+from pytdml.type import EOTrainingDataset
+from pytdml.utils import remove_empty
 import yaml
 import logging
+
+import json
+from json import JSONEncoder
+
+class MyEncoder(JSONEncoder):
+    def default(self, obj):
+        tdict = remove_empty(obj.__dict__)
+        items = list(tdict.items())
+        count = 0
+        for key,value in items:
+            #print(count,key,value)
+            if key == 'name':
+                items.insert(count-1, ('type','EOTrainingDataset'))
+                break
+            count += 1
+        return dict(items)
 
 # Conda environment
 env_path = r"/home/seadas/anaconda3/envs/ogcapi"
@@ -42,6 +59,41 @@ python = "{}/bin/python3".format(env_path)
 # Tensorflow environment variable added to environment variables: TF_CPP_MIN_LOG_LEVEL = 2
 ## 0 = all messages are logged. 1= INFO logs are removed. 2 = INFO with WARNINGS is removed
 
+
+class TDML:
+
+    def write_pytdml(self,logger, pytdml_yaml, pytdml_json, url = None):
+
+        # Run conversion to PyTDML
+        #try:
+        tdset = yaml_to_tdml.yaml_to_eo_tdml(pytdml_yaml)
+        print("EO tdset: ",tdset)
+        #except:
+        #    logger.error("Failed to generate eo_training_dataset")
+        #    return
+
+        # Export to JSON and add type as EOTrainingDataset
+        self.tdset = tdset
+        eo_json = EOTrainingDataset.to_dict(self.tdset)
+        dump = json.dumps(remove_empty(eo_json), indent=4, cls=MyEncoder)
+
+        # Write file to S3 bucket or locally
+        if url is not None:
+            # Initialize S3client using the stored OGC profile
+            session = boto3.Session(profile_name='ogc')
+            s3_client = session.client('s3')
+
+            # Write PyTDML json file
+            bucket,key = pytdml.io.S3_reader.parse_s3_path(pytdml_json)
+            logger.info("Writing to S3 bucket {}: {}".format(bucket,key))
+            s3_client.put_object(Body = dump, Bucket = bucket, Key = key)
+
+        else:
+            outfile = open(pytdml_json, "w")
+            outfile.write(dump)
+            outfile.close()
+
+            logger.info("Writing to: {}".format(pytdml_json))
 
 
 # Need to transform to EPSG4326 as other projections not allowed by GeoJSON format
@@ -137,29 +189,6 @@ def add_item(logger, footprint, bbox, epsg, gsd, img_path, image_id):
     item.validate()
 
     return item
-
-
-def write_pytdml(logger, pytdml_yaml, pytdml_json, url = None):
-
-    # Run conversion to pytdml
-    eo_training_dataset = yaml_to_tdml.yaml_to_eo_tdml(pytdml_yaml)
-
-    # Write file to S3 bucket or locally
-    if eo_training_dataset:
-        if url is not None:
-            # Initialize S3client using the stored OGC profile
-            session = boto3.Session(profile_name='ogc')
-            s3_client = session.client('s3')
-
-            # Write PyTDML json file
-            bucket,key = pytdml.io.S3_reader.parse_s3_path(pytdml_json)
-            logger.info("Writing to S3 bucket {}: {}".format(bucket,key))
-            s3_client.put_object(Body = str(eo_training_dataset), Bucket = bucket, Key = key)
-
-        else:
-            write_to_json(eo_training_dataset, pytdml_json)
-    else:
-        logger.error("Failed to generate eo_training_dataset")
 
 
 def main():
@@ -295,7 +324,7 @@ def main():
     if args.url:
         urlpath = args.url
     else:
-        urlpath = os.path.join(url, input_dir)
+        urlpath = url
 
     # Temp directory
     tmp_dir = TemporaryDirectory()
@@ -357,9 +386,12 @@ def main():
         if os.path.exists(cat_folder):
             shutil.rmtree(cat_folder)
         os.mkdir(cat_folder)
+        imgfile = os.path.join(urlpath, files[0])
+    else:
+        imgfile = os.path.join(urlpath, os.path.join(os.path.join(input_dir,"image"), files[0]))
 
     # Get image and then extract information from first object
-    img_path = pull_s3bucket(logger, tmp_dir, os.path.join(urlpath, files[0]), catalog_id, catalog_desc)
+    img_path = pull_s3bucket(logger, tmp_dir, imgfile, catalog_id, catalog_desc)
     bbox, footprint, src_crs, dst_crs = get_bbox_and_footprint(logger, img_path)
     logger.debug("Footprint: {}".format(footprint))
 
@@ -440,25 +472,28 @@ def main():
             os.mkdir(pytdml_folder)
         pytdml_json = os.path.join(pytdml_folder, "{}.gson".format(catalog_id))
 
+        tdml = TDML()
         if args.s3:
             bucket = url.split(".s3")[0].split("//")[1]
             s3_folder = os.path.join("s3://{}".format(bucket), pytdml_folder)
             s3_json = os.path.join(s3_folder, "{}.gson".format(catalog_id))
 
             # Write to S3 bucket
-            write_pytdml(logger, CONFIGURATION_PYTDML, s3_json, url)
+            tdml.write_pytdml(logger, CONFIGURATION_PYTDML, s3_json, url)
 
             # Read back to temp file
             tmp_json = os.path.join(tmp_dir.name, 'pytdml.json')
             urlretrieve(os.path.join(url, pytdml_json), tmp_json)
             logger.info("Retrieved {} to JSON file {}".format(os.path.join(url, pytdml_json), tmp_json))
+            training_dataset = pytdml.io.read_from_json(tmp_json)
+            print("EO re-read:",training_dataset)
 
         else:
-            write_pytdml(logger, CONFIGURATION_PYTDML, pytdml_json)
+            tdml.write_pytdml(logger, CONFIGURATION_PYTDML, pytdml_json)
+            training_dataset = pytdml.io.read_from_json(pytdml_json)
 
 
         # Check if pytdml worked - read from TDML json file
-        training_dataset = pytdml.io.read_from_json(pytdml_json)
         print("Checking training dataset: {}".format(training_dataset.name))
         print("Number of training samples: {}".format(str(training_dataset.amount_of_training_data)))
         print("Number of classes: {}".format(str(training_dataset.number_of_classes)))

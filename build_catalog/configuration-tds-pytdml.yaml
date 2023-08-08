@@ -2,10 +2,14 @@ dataset_type: EOTrainingDataset
 id: tds-catalog
 name: TDS Catalog
 description: TDS catalog
+classification_schema: xxx
+type: EOTrainingDataset
+extent: xxx
 version: 1.0
 created_time: 2022
 updated_time: 2022
 license: CC-BY-SA-4.0
+doi: xxx
 providers:
   - Pixalytics Ltd
 keywords:
@@ -37,7 +41,9 @@ classes:
   - greenhouses: 19
   - waste sites: 20
 tasks:
-  - description: Classification of waste plastics
+  - id: xxx
+    dataset_id: xxx
+    description: Classification of waste plastics
     task_type: Semantic Segmentation
 bands:
   - red
@@ -45,7 +51,11 @@ bands:
   - blue
   - alpha
 image_size: 290*200
+scope:
+  level: xxx
+  levelDescription: xxx
 data:
+  type: EOTrainingData
   task_type: SemanticSegmentation
   label_type: PixelLabel
   data_path:

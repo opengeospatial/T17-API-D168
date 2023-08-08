@@ -40,7 +40,8 @@ classes:
   - greenhouses: 19
   - waste sites: 20
 tasks:
-  - description: Classification of waste plastics
+  - id: 1
+    description: Classification of waste plastics
     task_type: Semantic Segmentation
 bands:
   - red
@@ -57,7 +58,7 @@ data:
   data_path:
     - type: image
       format: .tif
-      root_path: s3://pixalytics-ogc-api/TDS/input/
+      root_path: s3://pixalytics-ogc-api/TDS/input/image
     - type: label
-      format: .json # Needed for stac file to be picked up
-      root_path: s3://pixalytics-ogc-api/CATALOG/tds-catalog-tds-v0-9/tile49_label
+      format: .tif # Need .json for stac file to be picked up
+      root_path: s3://pixalytics-ogc-api/TDS/input/label
