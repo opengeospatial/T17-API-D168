@@ -71,7 +71,7 @@ Utilities used to support file conversion from GeoTiFF to COG or NetCDF.
 
 ### Static deployment via AWS S3 bucket
 
-Version 0-8 catalogs with multiple objects. A public access S3 bucket has been set up and contains both the catalogs and imagery:
+These are version 0-8 catalogs with multiple objects. A public access S3 bucket has been set up, and contains both the catalogs and imagery:
 
 * STAC collection catalog v0-8 created using pystac for GeoTiFFs:
   * main JSON: https://pixalytics-ogc-api.s3.eu-west-2.amazonaws.com/Testbed17/eo4sas-catalog-stac-v0-8/collection.json
