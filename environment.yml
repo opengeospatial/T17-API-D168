@@ -23,5 +23,6 @@ dependencies:
     - pyproj>=3.2.0
     - requests>=2.26.0
     - requests-aws4auth>=1.1.1
+    - s3fs==2023.5.0
 prefix: ~/envs/ogcapi
 

@@ -5,6 +5,7 @@ import sys
 import pystac
 from pystac.extensions.projection import ProjectionExtension
 import os
+import subprocess
 from argparse import ArgumentParser
 from urllib.request import urlretrieve
 from urllib.error import URLError
@@ -13,16 +14,86 @@ import rasterio
 from rasterio.warp import transform_bounds
 from shapely.geometry import Polygon, mapping
 from datetime import datetime
-import json
 import ast
 import re
+
 # Pixalytics version of repository, from https://github.com/geopython/pygeometa
 from pygeometa.core import read_mcf
-from pygeometa.schemas.ogc_api_dataset_record import OGCAPIDRecordOutputSchema
-from pygeometa.schemas.ogc_api_records import OGCAPIRecordOutputSchema
+from pygeometa.schemas.ogcapi_dataset_records import OGCAPIDRecordOutputSchema
+from pygeometa.schemas.ogcapi_records import OGCAPIRecordOutputSchema
+from pygeometa.schemas.ogc_t18dml import OGCT18DMLOutputSchema
 
+from io import BytesIO
+# pip install boto3
+import boto3
+
+# TrainingDL-AI ML TDS format, tested with version 1.1.3
+import pytdml
+from pytdml import yaml_to_tdml
+from pytdml.io import write_to_json
+from pytdml.type import EOTrainingDataset
+from pytdml.utils import remove_empty
 import yaml
 import logging
+
+import json
+from json import JSONEncoder
+
+class MyEncoder(JSONEncoder):
+    def default(self, obj):
+        tdict = remove_empty(obj.__dict__)
+        items = list(tdict.items())
+        count = 0
+        for key,value in items:
+            #print(count,key,value)
+            if key == 'name':
+                items.insert(count-1, ('type','EOTrainingDataset'))
+                break
+            count += 1
+        return dict(items)
+
+# Conda environment
+env_path = r"/home/seadas/anaconda3/envs/ogcapi"
+python = "{}/bin/python3".format(env_path)
+
+# Tensorflow environment variable added to environment variables: TF_CPP_MIN_LOG_LEVEL = 2
+## 0 = all messages are logged. 1= INFO logs are removed. 2 = INFO with WARNINGS is removed
+
+
+class TDML:
+
+    def write_pytdml(self,logger, pytdml_yaml, pytdml_json, url = None):
+
+        # Run conversion to PyTDML
+        #try:
+        tdset = yaml_to_tdml.yaml_to_eo_tdml(pytdml_yaml)
+        #print("EO tdset: ",tdset)
+        #except:
+        #    logger.error("Failed to generate eo_training_dataset")
+        #    return
+
+        # Export to JSON and add type as EOTrainingDataset
+        self.tdset = tdset
+        eo_json = EOTrainingDataset.to_dict(self.tdset)
+        dump = json.dumps(remove_empty(eo_json), indent=4, cls=MyEncoder)
+
+        # Write file to S3 bucket or locally
+        if url is not None:
+            # Initialize S3client using the stored OGC profile
+            session = boto3.Session(profile_name='ogc')
+            s3_client = session.client('s3')
+
+            # Write PyTDML json file
+            bucket,key = pytdml.io.S3_reader.parse_s3_path(pytdml_json)
+            logger.info("Writing to S3 bucket {}: {}".format(bucket,key))
+            s3_client.put_object(Body = dump, Bucket = bucket, Key = key)
+
+        else:
+            outfile = open(pytdml_json, "w")
+            outfile.write(dump)
+            outfile.close()
+
+            logger.info("Writing to: {}".format(pytdml_json))
 
 
 # Need to transform to EPSG4326 as other projections not allowed by GeoJSON format
@@ -77,10 +148,14 @@ def pull_s3bucket(logger, tmp_dir, url, catalog_id, catalog_desc):
     return img_path
 
 
-def add_item(footprint, bbox, epsg, gsd, img_path, image_id):
-    fdate = image_id.split("_")[0]
-    dateval = datetime(int(fdate[0:4]), int(fdate[4:6]), int(fdate[6:8]), int(fdate[9:11]), int(fdate[11:13]),
-                       int(fdate[13:15]))
+def add_item(logger, footprint, bbox, epsg, gsd, img_path, image_id):
+    try:
+        fdate = image_id.split("_")[0]
+        dateval = datetime(int(fdate[0:4]), int(fdate[4:6]), int(fdate[6:8]), int(fdate[9:11]), int(fdate[11:13]),
+                           int(fdate[13:15]))
+    except:
+        dateval = datetime.utcnow()
+        logger.warning("Failed to extract date from {}, using today's date".format(image_id, dateval))
 
     # Add item to catalog and apply timestamp
     item = pystac.Item(id=image_id.split(".")[0],
@@ -150,6 +225,20 @@ def main():
         default=False,
     )
     parser.add_argument(
+        "-S",
+        "--s3",
+        help="Store data in S3 bucket",
+        action="store_true",
+        default=False,
+    )
+    parser.add_argument(
+        "-T",
+        "--tds",
+        help="Create Test Data Set catalog",
+        action="store_true",
+        default=False,
+    )
+    parser.add_argument(
         "-c",
         "--collection",
         help="Create STAC collection",
@@ -188,7 +277,14 @@ def main():
 
     # Configuration to be loaded from main directory
     if args.test:
-        CONFIGURATION_FILE_PATH = os.path.join(code_dir, "test-configuration.yaml")
+        CONFIGURATION_FILE_PATH = os.path.join(code_dir, "configuration-test.yaml")
+    elif args.tds:
+        if args.s3:
+            CONFIGURATION_FILE_PATH = os.path.join(code_dir, "configuration-tds-s3.yaml")
+            CONFIGURATION_PYTDML = os.path.join(code_dir, "configuration-tds-pytdml-s3.yaml")
+        else:
+            CONFIGURATION_FILE_PATH = os.path.join(code_dir, "configuration-tds.yaml")
+            CONFIGURATION_PYTDML = os.path.join(code_dir, "configuration-tds-pytdml.yaml")
     elif args.netcdf:
         CONFIGURATION_FILE_PATH = os.path.join(code_dir, "configuration-nc.yaml")
     elif args.netcdfsingle:
@@ -205,6 +301,13 @@ def main():
             url = config["url"]
             temp = config["files"]
             files = temp.split(",")
+
+            # Additional files for a TDS dataset
+            if "tds" in CONFIGURATION_FILE_PATH:
+                temp = config["label_files"]
+                label_files = temp.split(",")
+
+            input_dir = config["input_dir"]
             out_default = config["output_dir"]
             gsd = config["gsd"]
             yaml_file = config["yaml_file"]
@@ -246,7 +349,7 @@ def main():
 
     # Date range
     # Add item to catalog
-    if args.test:
+    if args.test or args.tds:
         dateval = datetime.utcnow()
         end_dateval = dateval
     else:
@@ -258,29 +361,37 @@ def main():
             fdate = fdate.split("-")[1]
         elif len(files) > 1:  # If more than one file
             fdate = files[len(files) - 1].split("_")[0]
-        end_dateval = datetime(int(fdate[0:4]), int(fdate[4:6]), int(fdate[6:8]), int(fdate[9:11]), int(fdate[11:13]),
-                               int(fdate[13:15]))
+        end_dateval = datetime(int(fdate[0:4]), int(fdate[4:6]), int(fdate[6:8]), int(fdate[9:11]), int(fdate[11:13]), int(fdate[13:15]))
 
     print("Date range {} to {}".format(dateval, end_dateval))
 
-    # Create catalog sub_folder - delete if exists
+    # Include netcdf in sub_folder name
     if args.netcdf:
         netcdf = "-nc"
     elif args.netcdfsingle:
         netcdf = "-nc-single"
     else:
         netcdf = ""
+    # Create catalog sub_folder - delete if exists
     if args.stac or args.collection:
         cat_folder = os.path.join(outdir, "{}-stac{}-v{}".format(catalog_id, netcdf, version))
+    elif args.tds:
+        cat_folder = os.path.join(outdir, "{}-tds{}-v{}".format(catalog_id, netcdf, version))
+        pytdml_folder = os.path.join(outdir, "{}-pytdml-v{}".format(catalog_id, version))
+        logger.info("Generating catalog at {}".format(cat_folder))
     else:
         cat_folder = os.path.join(outdir, "{}-records{}-v{}".format(catalog_id, netcdf, version))
 
-    if os.path.exists(cat_folder):
-        shutil.rmtree(cat_folder)
-    os.mkdir(cat_folder)
+    if not args.s3:
+        if os.path.exists(cat_folder):
+            shutil.rmtree(cat_folder)
+        os.mkdir(cat_folder)
+        imgfile = os.path.join(urlpath, files[0])
+    else:
+        imgfile = os.path.join(urlpath, os.path.join(os.path.join(input_dir,"image"), files[0]))
 
     # Get image and then extract information from first object
-    img_path = pull_s3bucket(logger, tmp_dir, urlpath + files[0], catalog_id, catalog_desc)
+    img_path = pull_s3bucket(logger, tmp_dir, imgfile, catalog_id, catalog_desc)
     bbox, footprint, src_crs, dst_crs = get_bbox_and_footprint(logger, img_path)
     logger.debug("Footprint: {}".format(footprint))
 
@@ -305,12 +416,12 @@ def main():
             catalog = pystac.Catalog(id=catalog_id, title=catalog_title, description=catalog_desc)
 
         for count, file in enumerate(files):
-            item = add_item(footprint, bbox, src_crs.split(":")[1], gsd, url, file)
+            item = add_item(logger, footprint, bbox, src_crs.split(":")[1], gsd, url, file)
+            catalog.add_item(item)
+
             if count == 0:
                 # JSON dump item
                 logger.debug(json.dumps(item.to_dict(), indent=4))
-
-            catalog.add_item(item)
 
         # Update extents in catalog from items
         if args.collection:
@@ -329,6 +440,64 @@ def main():
         with open(catalog.get_self_href()) as f:
             print(f.read())
 
+    elif args.tds: # Create T18 TDS catalog
+        catalog = pystac.Catalog(id=catalog_id, title=catalog_title, description=catalog_desc)
+
+        for count, file in enumerate(files):
+            item = add_item(logger, footprint, bbox, src_crs.split(":")[1], gsd, url, file)
+            catalog.add_item(item)
+            if count == 0:
+                # JSON dump item
+                logger.debug(json.dumps(item.to_dict(), indent=4))
+
+            logger.info("Adding label file")
+            item = add_item(logger, footprint, bbox, src_crs.split(":")[1], gsd, url, label_files[count])
+        catalog.add_item(item)
+
+        # Set HREFs
+        catalog.normalize_hrefs(cat_folder)
+
+        # Validate, which needs: pip install pystac[validation]
+        catalog.validate_all()
+
+        # Save catalog
+        catalog.save(catalog_type=pystac.CatalogType.SELF_CONTAINED)
+
+        # Show catalog
+        with open(catalog.get_self_href()) as f:
+            print(f.read())
+
+        # Also create pytdml catalog
+        if not args.s3 and not os.path.exists(pytdml_folder):
+            os.mkdir(pytdml_folder)
+        pytdml_json = os.path.join(pytdml_folder, "{}.gson".format(catalog_id))
+
+        tdml = TDML()
+        if args.s3:
+            bucket = url.split(".s3")[0].split("//")[1]
+            s3_folder = os.path.join("s3://{}".format(bucket), pytdml_folder)
+            s3_json = os.path.join(s3_folder, "{}.gson".format(catalog_id))
+
+            # Write to S3 bucket
+            tdml.write_pytdml(logger, CONFIGURATION_PYTDML, s3_json, url)
+
+            # Read back to temp file
+            tmp_json = os.path.join(tmp_dir.name, 'pytdml.json')
+            urlretrieve(os.path.join(url, pytdml_json), tmp_json)
+            logger.info("Retrieved {} to JSON file {}".format(os.path.join(url, pytdml_json), tmp_json))
+            training_dataset = pytdml.io.read_from_json(tmp_json)
+            #print("EO re-read:",training_dataset)
+
+        else:
+            tdml.write_pytdml(logger, CONFIGURATION_PYTDML, pytdml_json)
+            training_dataset = pytdml.io.read_from_json(pytdml_json)
+
+
+        # Check if pytdml worked - read from TDML json file
+        print("Checking training dataset: {}".format(training_dataset.name))
+        print("Number of training samples: {}".format(str(training_dataset.amount_of_training_data)))
+        print("Number of classes: {}".format(str(training_dataset.number_of_classes)))
+
     else:  # OGC Records
         logger.info("Creating OGC Records Catalog")
 
@@ -336,8 +505,10 @@ def main():
         catalog_dict = {}
         catalog_dict.update({'cat_id': catalog_id})
         catalog_dict.update({'cat_description': catalog_desc})
-        catalog_dict.update({'cat_begin': dateval.strftime("%Y-%m-%d")})
-        catalog_dict.update({'cat_end': end_dateval.strftime("%Y-%m-%d")})
+        cat_begin = dateval.strftime("%Y-%m-%d")
+        cat_end = end_dateval.strftime("%Y-%m-%d")
+        catalog_dict.update({'cat_begin': cat_begin})
+        catalog_dict.update({'cat_end': cat_end})
 
         # Loop for each file to create an OGC record for each
         link_dict = {}
@@ -408,8 +579,11 @@ def main():
 
             # JSON dataset files
             dataset = "{}{}".format(os.path.basename(yaml_file).split(".")[0], count + 1)
-            json_file = os.path.join(cat_folder, dataset + ".json")
-            link_dict.update({dataset: "./" + os.path.basename(json_file)})
+            # create dataset folder
+            dset_folder = os.path.join(cat_folder, dataset)
+            os.mkdir(dset_folder)
+            json_file = os.path.join(dset_folder, dataset + ".json")
+            link_dict.update({dataset: "{}/".format(dataset) + os.path.basename(json_file)})
 
             # Choose API Records output schema
             records_os = OGCAPIRecordOutputSchema()
@@ -425,13 +599,54 @@ def main():
             # Last loop
             if files[-1] == files[count]:
 
+                # For the catalog, update generic record yaml
+                cat_yaml = yaml_file.replace("record","catalog")
+                out_yaml = os.path.join(os.path.dirname(__file__), os.path.splitext(os.path.basename(cat_yaml))[0] + "-updated.yml")
+
+                # Read original YML contents
+                print(out_yaml)
+                with open(os.path.join(os.path.dirname(__file__), cat_yaml)) as f:
+                    # use safe_load instead of load
+                    dataMap = yaml.safe_load(f)
+                    f.close()
+
+                # Update details
+                dataMap['identification']['extents']['spatial'] = [res]
+                yaml_dict = {}
+                yaml_dict.update({'begin': date_string})
+                yaml_dict.update({'end': end_date_string})
+                dataMap['identification']['extents']['temporal'] = [yaml_dict]
+
+                # Remove single quotes
+                dataDict = {re.sub("'", "", key): val for key, val in dataMap.items()}
+
+                # Output modified version of YAML
+                with open(out_yaml, 'w') as f:
+                    yaml.dump(dataDict, f)
+                    f.close()
+
+                # Read modified YAML into dictionary
+                mcf_dict = read_mcf(out_yaml)
+
                 # Add record links
                 catalog_dict.update({'cat_file': link_dict})
                 mcf_dict.update(catalog_dict)
 
+                # Catalog adjustments
+                mcf_dict['metadata']['identifier'] = catalog_id
+                mcf_dict['identification']['title'] = catalog_title
+                mcf_dict['identification']['name'] = 'sam'
+                mcf_dict['identification']['abstract'] = catalog_desc
+
+                now_dateval = datetime.utcnow().strftime("%Y-%m-%d")
+
+                mcf_dict['identification']['dates']['creation'] = now_dateval
+                mcf_dict['identification']['dates']['revision'] = now_dateval
+                mcf_dict['distribution']['s3']['url'] = link_dict
+                print("Links: ",mcf_dict)
                 # Choose API Dataset Record as catalog
                 # https://github.com/cholmes/ogc-collection/blob/main/ogc-dataset-record-spec.md - see examples
-                records_os = OGCAPIDRecordOutputSchema()
+                records_os = OGCAPIRecordOutputSchema()
 
                 # Default catalog schema
                 #print(mcf_dict)
@@ -443,6 +658,7 @@ def main():
                 with open(cat_file, 'w') as ff:
                     ff.write(json_string)
                     ff.close()
+
 
     # Clean up
     tmp_dir.cleanup()

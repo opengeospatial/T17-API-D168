@@ -13,6 +13,8 @@ build_catalog_records:
 	$(PYTHON) ~/ogcapi_testbed17_dataset_d168/build_catalog/create_catalog.py -v
 build_catalog_stac:
 	$(PYTHON) ~/ogcapi_testbed17_dataset_d168/build_catalog/create_catalog.py -v --stac
+build_tds_stac:
+	$(PYTHON) ~/ogcapi_testbed17_dataset_d168/build_catalog/create_catalog.py -v --tds --stac
 
 
 ## Login to AWS via Docker for upload/download of container image

@@ -1,0 +1,38 @@
+# Catalog Id
+catalog_id: "tds-catalog"
+
+# Catalog description
+catalog_title: "TDS Catalog"
+
+# Catalog description
+catalog_desc: "TDS catalog"
+
+#  TDS url
+url: "https://pixalytics-ogc-api.s3.eu-west-2.amazonaws.com"
+
+#  TDS data files to include in catalog
+files: "tile49_rgb.tif"
+
+#  TDS label files to include in catalog
+label_files: "tile49_label.tif"
+
+# Image Id
+image_id: "image_id"
+
+# Spatial resolution
+gsd: "10.0"
+
+# Input directory
+input_dir: "TrainingDML-AI/input"
+
+#  Output directory.
+output_dir: "TrainingDML-AI/output"
+
+# YAML for API Records
+yaml_file: "./tds-record.yml"
+
+# Provider details
+provider_name: "Pixalytics Ltd"
+provider_url: "https://www.pixalytics.com/"
+
+
