@@ -2,23 +2,20 @@ import os
 import sys
 import boto3
 # pip install elasticsearch==7.13.4
-# More recent versions of the elasticsearch python library do not support AWS, see https://www.theregister.com/2021/08/09/elasticsearch_python_client_change/
-from elasticsearch import Elasticsearch, RequestsHttpConnection, helpers
+# More recent versions elasticsearch python library do not support AWS
+# see https://www.theregister.com/2021/08/09/elasticsearch_python_client_change/
+from elasticsearch import Elasticsearch, RequestsHttpConnection
 # pip install requests-aws4auth
 from requests_aws4auth import AWS4Auth
 import click
 from click_conf import conf
-from elasticsearch_loader import load
 from elasticsearch_loader.parsers import json
 import yaml
 import logging
 
 home = os.path.expanduser("~")
-codedir, program = os.path.split(__file__)
-CONFIGURATION_FILE_PATH = os.path.join(codedir, "es_upload_conf.yaml")
-
-if not os.path.exists(CONFIGURATION_FILE_PATH):
-    print("Configuration file is missing")
+code_dir, program = os.path.split(__file__)
+CONFIGURATION_FILE_PATH = os.path.join(code_dir, "es_upload_conf.yaml")
 
 try:
     with open(CONFIGURATION_FILE_PATH, "r") as config_file:
@@ -43,7 +40,7 @@ try:
 
         print("Configuration was loaded from '{}'.".format(CONFIGURATION_FILE_PATH))
 
-except Exception:
+except (FileNotFoundError, IOError):
     print("Unable to load default configuration from '{}'.".format(CONFIGURATION_FILE_PATH))
     sys.exit(1)
 
@@ -76,6 +73,7 @@ def iam_connect():
     )
     return es
 
+
 def master_connect():
     # Load master credentials
     with open(os.path.join(home, 'esearch.txt'), 'r') as f1:
@@ -92,25 +90,27 @@ def master_connect():
     )
     return es
 
-def s3_iterator(bucket, folder):
-    for file in bucket.objects.all():
+
+def s3_iterator(s3bucket, folder):
+    for file in s3bucket.objects.all():
         if folder in file.key and "catalog.json" not in file.key:
             content = json.load(file.get()['Body'])
-            print("Uploading {} from {}".format(content,file.key))
+            print("Uploading {} from {}".format(content, file.key))
             yield content
 
-def load_s3(ctx, index, bucket, folder):
+
+def load_s3(ctx, file_index, s3bucket, folder):
     # Access bucket
     session = boto3.session.Session(profile_name=iam_name)
     s3 = session.resource('s3')
-    bucket_obj = s3.Bucket(bucket)
+    bucket_obj = s3.Bucket(s3bucket)
 
-    # Creat index and upload mapping to index file
-    mapfile = open(os.path.join(codedir, "index_settings_file.json"), 'rb')
-    response = ctx.obj['es_conn'].indices.create(index=index, body=json.load(mapfile))
-    mapfile.close()
+    # Create index and upload mapping to index file
+    map_file = open(os.path.join(code_dir, "index_settings_file.json"), 'rb')
+    response = ctx.obj['es_conn'].indices.create(index=file_index, body=json.load(map_file))
+    map_file.close()
     if 'acknowledged' in response:
-        if response['acknowledged'] == True:
+        if response['acknowledged'] is True:
             print("Index mapping success for: {}".format(response['index']))
     # catch API error response
     elif 'error' in response:
@@ -119,13 +119,13 @@ def load_s3(ctx, index, bucket, folder):
         return
 
     # Load data from S3 bucket to Elasticsearch
-    #load(s3_iterator(bucket_obj, folder), ctx.obj)
+    # load(s3_iterator(bucket_obj, folder), ctx.obj)
     count = 0
     for file in bucket_obj.objects.all():
-        #print("File: {}".format(file.key))
+        # print("File: {}".format(file.key))
         if folder in file.key and "catalog.json" not in file.key:
             content = json.load(file.get()['Body'])
-            response = ctx.obj['es_conn'].index(index=index, id=count, body=content)
+            response = ctx.obj['es_conn'].index(index=file_index, id=count, body=content)
             print("Uploading {} from {}: {}".format(content, file.key, response['result']))
 
             count += 1
@@ -139,8 +139,8 @@ def load_s3(ctx, index, bucket, folder):
 @conf(default='esl.yml')
 @click.option('--bulk-size', default=500, help='How many docs to collect before writing to Elasticsearch (default 500)')
 @click.option('--id-field', help='Specify field name that be used as document id')
-@click.option('--keys', type=str, help='Comma separated keys to pick from each document', default='', callback=lambda c, p, v: [x for x in v.split(',') if x])
-@click.option('--progress', default=False, is_flag=True, help='Enable progress bar - NOTICE: in order to show progress the entire input should be collected and can consume more memory than without progress bar')
+@click.option('--keys', type=str, help='Comma separated keys to pick from each document', default='',
+              callback=lambda c, p, v: [x for x in v.split(',') if x])
 @click.option('--update', default=False, is_flag=True, help='Merge and update existing doc instead of overwrite')
 @click.option('--with-retry', default=False, is_flag=True, help='Retry if ES bulk insertion failed')
 @click.option('--diagnose', default=False, is_flag=True, help='Run diagnosis as master user')
@@ -148,7 +148,6 @@ def load_s3(ctx, index, bucket, folder):
 @click.option('--verbose', default=False, is_flag=True, help='Add extra information to logs')
 @click.pass_context
 def main(ctx, **opts):
-
     # Start logging
     logger = logging.getLogger(program)
     logger.setLevel(logging.DEBUG if opts['verbose'] else logging.INFO)
@@ -181,7 +180,6 @@ def main(ctx, **opts):
         # Upload data to elasticsearch
         load_s3(ctx, index, bucket, folder=catalog)
 
-
     else:
         # Query test-index
         es = iam_connect()
@@ -196,13 +194,13 @@ def main(ctx, **opts):
 
         # interrogate the schema by accessing index's _doc type attr'
         schema = raw_data[index]["mappings"]["properties"]
-        print (json.dumps(schema, indent=4))
-        print ("{} fields in mapping".format(len(schema)))
+        print(json.dumps(schema, indent=4))
+        print("{} fields in mapping".format(len(schema)))
         print("all fields: {}".format(list(schema.keys())))
 
         # Get first document in index
         result = es.get(index=index, id=0)
-        print("First id for {}: {}".format(index,result))
+        print("First id for {}: {}".format(index, result))
 
         body = {'query': {'bool': {'must': [{'match': {'type': 'Feature'}}]}}}
         res = es.search(index=index, body=body)
