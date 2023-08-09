@@ -1,0 +1,67 @@
+dataset_type: EOTrainingDataset
+id: tds-catalog
+name: TDS Catalog
+description: TDS catalog
+classification_schema: xxx
+type: EOTrainingDataset
+extent: xxx
+version: 1.0
+created_time: 2022
+updated_time: 2022
+license: CC-BY-SA-4.0
+doi: xxx
+providers:
+  - Pixalytics Ltd
+keywords:
+  - Land Cover Classification
+data_sources:
+  - id: sentinel2
+    data_type: Optical
+    platform: Sentinel-2
+    resolution: 10m
+classes:
+  - clear water: 1
+  - algal blooms: 2
+  - aqueous deposits: 3
+  - bare ground: 4
+  - murrum soil: 5
+  - sand: 6
+  - grassland: 7
+  - shrubland: 8
+  - forest: 9
+  - cropland: 10
+  - palm: 11
+  - buildings: 12
+  - artificial surfaces: 13
+  - cloud: 14
+  - shadows: 15
+  - plastic: 16
+  - tyres: 17
+  - waves: 18
+  - greenhouses: 19
+  - waste sites: 20
+tasks:
+  - id: xxx
+    dataset_id: xxx
+    description: Classification of waste plastics
+    task_type: Semantic Segmentation
+bands:
+  - red
+  - green
+  - blue
+  - alpha
+image_size: 290*200
+scope:
+  level: xxx
+  levelDescription: xxx
+data:
+  type: EOTrainingData
+  task_type: SemanticSegmentation
+  label_type: PixelLabel
+  data_path:
+    - type: image
+      format: .tif
+      root_path: /home/seadas/shared/ogcapi/input-TDS/rgb
+    - type: label
+      format: .json # Needed for stac file to be picked up
+      root_path: /home/seadas/shared/ogcapi/CATALOG/tds-catalog-tds-v0-9/tile49_label
