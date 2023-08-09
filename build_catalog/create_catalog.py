@@ -515,7 +515,8 @@ def main():
         for count, file in enumerate(files):
 
             # For each file, update generic record yaml
-            out_yaml = os.path.join(os.path.dirname(__file__), os.path.splitext(os.path.basename(yaml_file))[0] + "-updated.yml")
+            out_yaml = os.path.join(os.path.dirname(__file__),
+                                    os.path.splitext(os.path.basename(yaml_file))[0] + "-updated.yml")
 
             # Read YML contents
             with open(os.path.join(os.path.dirname(__file__), yaml_file)) as f:
