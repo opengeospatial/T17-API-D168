@@ -146,7 +146,7 @@ ogcapi
 pygeometa
 elasticsearch_loader
 pytdml
-TDS
+TrainingDML-AI
 
 # Local configuration files
 deploy_catalog/es_upload_conf.yaml

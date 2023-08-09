@@ -23,10 +23,10 @@ image_id: "image_id"
 gsd: "10.0"
 
 # Input directory
-input_dir: "TDS/input"
+input_dir: "TrainingDML-AI/input"
 
 #  Output directory.
-output_dir: "TDS/output"
+output_dir: "TrainingDML-AI/output"
 
 # YAML for API Records
 yaml_file: "./tds-record.yml"

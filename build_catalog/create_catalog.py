@@ -67,7 +67,7 @@ class TDML:
         # Run conversion to PyTDML
         #try:
         tdset = yaml_to_tdml.yaml_to_eo_tdml(pytdml_yaml)
-        print("EO tdset: ",tdset)
+        #print("EO tdset: ",tdset)
         #except:
         #    logger.error("Failed to generate eo_training_dataset")
         #    return
@@ -486,7 +486,7 @@ def main():
             urlretrieve(os.path.join(url, pytdml_json), tmp_json)
             logger.info("Retrieved {} to JSON file {}".format(os.path.join(url, pytdml_json), tmp_json))
             training_dataset = pytdml.io.read_from_json(tmp_json)
-            print("EO re-read:",training_dataset)
+            #print("EO re-read:",training_dataset)
 
         else:
             tdml.write_pytdml(logger, CONFIGURATION_PYTDML, pytdml_json)
