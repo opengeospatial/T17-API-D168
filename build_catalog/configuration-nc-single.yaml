@@ -21,3 +21,7 @@ output_dir: "./ogcapi/CATALOG"
 
 # YAML for API Records
 yaml_file: "./eo4sas-record.yml"
+
+# Provider details
+provider_name: "Pixalytics Ltd"
+provider_url: "https://www.pixalytics.com/"
