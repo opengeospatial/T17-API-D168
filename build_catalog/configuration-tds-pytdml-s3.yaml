@@ -48,11 +48,9 @@ bands:
   - red
   - green
   - blue
-  - alpha
-image_size: 290*200
+image_size: variable
 scope:
   level: dataset
-  levelDescription: Pixalytics Plastics Training Dataset
 data:
   task_type: SemanticSegmentation
   label_type: PixelLabel
