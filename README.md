@@ -14,7 +14,9 @@ The environment will not be activated, so to activate run:
 
 Install pystac with the validation optional requirement (e.g. pip install pystac[validation]) as these schemas are used
 
-### Install pygeometa from the Pixalytics repository, so the updates implemented for this activity are accessible
+### Install pygeometa 
+
+This implementation uses the version from the Pixalytics forked repository, so the that specific version needs to be installed:
 
 `python -m pip install git+https://github.com/pixalytics-ltd/pygeometa.git@t17-rcatalog`
 
@@ -27,6 +29,12 @@ OR if you want to further edit the code, setup pygeometa in develop mode:
 `python setup.py develop`
 
 <b>Note:</b> pygeometa was updated to include a Record to describe a 'dataset', see https://github.com/cholmes/ogc-collection/blob/main/ogc-dataset-record-spec.md 
+
+### Install pytdml 
+
+As this implementation uses updated code, found in the Pixalytics forked repository, the modified version needs to be installed:
+
+`python -m pip install git+https://github.com/pixalytics-ltd/pytdml.git@develop`
 
 ## Clone this repository
 
